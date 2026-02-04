@@ -1,6 +1,5 @@
 """Personas Navigator - Main Streamlit Application."""
 
-import asyncio
 import base64
 import streamlit as st
 from datetime import datetime
@@ -117,7 +116,7 @@ def get_browser():
     return st.session_state.browser
 
 
-async def start_navigation(url: str):
+def start_navigation(url: str):
     """Avvia la navigazione iniziale."""
     browser = get_browser()
     claude = get_claude_client()
@@ -126,8 +125,8 @@ async def start_navigation(url: str):
         return
 
     try:
-        await browser.start()
-        screenshot, final_url = await browser.navigate(url)
+        browser.start()
+        screenshot, final_url = browser.navigate(url)
 
         # Rileva tipo pagina
         page_type = detect_page_type(screenshot, claude)
@@ -181,7 +180,7 @@ async def start_navigation(url: str):
         st.session_state.is_running = False
 
 
-async def handle_autonomous_step():
+def handle_autonomous_step():
     """Gestisce uno step della navigazione autonoma."""
     navigator = st.session_state.autonomous_navigator
 
@@ -192,7 +191,7 @@ async def handle_autonomous_step():
     if navigator.is_paused:
         return
 
-    result = await navigator.next_step()
+    result = navigator.next_step()
 
     # Aggiorna stato
     st.session_state.current_screenshot_b64 = result.get("screenshot", "")
@@ -231,7 +230,7 @@ async def handle_autonomous_step():
         st.session_state.is_autonomous_running = False
 
 
-async def handle_user_input(user_input: str):
+def handle_user_input(user_input: str):
     """Gestisce l'input dell'utente in modalita' guidata."""
     claude = get_claude_client()
     browser = get_browser()
@@ -247,7 +246,7 @@ async def handle_user_input(user_input: str):
 
     if input_type == "NAVIGATE":
         # Esegui navigazione
-        result = await execute_navigation_command(
+        result = execute_navigation_command(
             browser=browser,
             command=content,
             current_url=st.session_state.current_url,
@@ -320,7 +319,7 @@ async def handle_user_input(user_input: str):
         })
 
 
-async def start_autonomous_navigation():
+def start_autonomous_navigation():
     """Avvia la navigazione autonoma."""
     persona = get_persona(st.session_state.persona_id)
     claude = get_claude_client()
@@ -341,7 +340,7 @@ async def start_autonomous_navigation():
     st.session_state.is_autonomous_running = True
 
     # Avvia navigazione
-    result = await navigator.start(st.session_state.url)
+    result = navigator.start(st.session_state.url)
 
     # Aggiorna stato
     st.session_state.current_screenshot_b64 = result.get("screenshot", "")
@@ -384,7 +383,7 @@ def reset_session():
     """Resetta la sessione."""
     # Chiudi browser se aperto
     if st.session_state.browser:
-        asyncio.run(st.session_state.browser.stop())
+        st.session_state.browser.stop()
 
     # Reset stato
     st.session_state.navigation_state = None
@@ -458,9 +457,9 @@ def render_setup_form():
             st.error("Inserisci un URL")
         else:
             if st.session_state.mode == "autonomous":
-                asyncio.run(start_autonomous_navigation())
+                start_autonomous_navigation()
             else:
-                asyncio.run(start_navigation(st.session_state.url))
+                start_navigation(st.session_state.url)
             st.rerun()
 
 
@@ -469,7 +468,7 @@ def render_screenshot():
     if st.session_state.current_screenshot_b64:
         st.image(
             f"data:image/png;base64,{st.session_state.current_screenshot_b64}",
-            use_container_width=True
+            use_column_width=True
         )
 
 
@@ -547,7 +546,7 @@ def render_autonomous_controls():
         with col2:
             if st.button("Salta attesa", use_container_width=True):
                 st.session_state.skip_wait = True
-                asyncio.run(handle_autonomous_step())
+                handle_autonomous_step()
                 st.rerun()
 
         with col3:
@@ -573,7 +572,7 @@ def render_input_section():
         submitted = st.form_submit_button("Invia", use_container_width=True)
 
         if submitted and user_input:
-            asyncio.run(handle_user_input(user_input))
+            handle_user_input(user_input)
             st.rerun()
 
     # Suggerimenti
@@ -585,7 +584,7 @@ def render_input_section():
     for i, suggestion in enumerate(suggestions[:6]):
         with cols[i % 3]:
             if st.button(suggestion, key=f"sugg_{i}", use_container_width=True):
-                asyncio.run(handle_user_input(suggestion))
+                handle_user_input(suggestion)
                 st.rerun()
 
 
@@ -703,7 +702,7 @@ def main():
             time.sleep(3)
 
         st.session_state.skip_wait = False
-        asyncio.run(handle_autonomous_step())
+        handle_autonomous_step()
         st.rerun()
 
 
