@@ -1,10 +1,9 @@
-"""Playwright wrapper per browser automation."""
+"""Playwright wrapper per browser automation (sync API)."""
 
 import base64
-import asyncio
 from typing import Optional, Tuple
 from urllib.parse import urlparse, urlunparse
-from playwright.async_api import async_playwright, Browser, Page, BrowserContext
+from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
 
 
 # Selettori comuni per cookie banner
@@ -49,10 +48,10 @@ class BrowserManager:
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
 
-    async def start(self) -> None:
+    def start(self) -> None:
         """Avvia il browser."""
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch(
             headless=True,
             args=[
                 '--no-sandbox',
@@ -61,30 +60,30 @@ class BrowserManager:
                 '--disable-gpu'
             ]
         )
-        self._context = await self._browser.new_context(
+        self._context = self._browser.new_context(
             viewport={'width': 1280, 'height': 800},
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             locale='it-IT'
         )
-        self._page = await self._context.new_page()
+        self._page = self._context.new_page()
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         """Chiude il browser."""
         if self._page:
-            await self._page.close()
+            self._page.close()
         if self._context:
-            await self._context.close()
+            self._context.close()
         if self._browser:
-            await self._browser.close()
+            self._browser.close()
         if self._playwright:
-            await self._playwright.stop()
+            self._playwright.stop()
 
         self._page = None
         self._context = None
         self._browser = None
         self._playwright = None
 
-    async def navigate(self, url: str) -> Tuple[str, str]:
+    def navigate(self, url: str) -> Tuple[str, str]:
         """
         Naviga a un URL e restituisce screenshot e URL finale.
 
@@ -95,31 +94,31 @@ class BrowserManager:
             Tupla (screenshot_base64, final_url)
         """
         if not self._page:
-            await self.start()
+            self.start()
 
         # Assicura che l'URL abbia il protocollo
         if not url.startswith('http://') and not url.startswith('https://'):
             url = 'https://' + url
 
         try:
-            await self._page.goto(url, wait_until='networkidle', timeout=30000)
+            self._page.goto(url, wait_until='networkidle', timeout=30000)
         except Exception:
             # Fallback se networkidle timeout
-            await self._page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            self._page.goto(url, wait_until='domcontentloaded', timeout=30000)
 
         # Attendi un po' per il rendering
-        await self._page.wait_for_timeout(1000)
+        self._page.wait_for_timeout(1000)
 
         # Tenta di chiudere cookie banner
-        await self._try_dismiss_cookies()
+        self._try_dismiss_cookies()
 
         # Cattura screenshot
-        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_bytes = self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return screenshot_b64, self._page.url
 
-    async def click_element(self, selector_or_text: str) -> Tuple[bool, str, str]:
+    def click_element(self, selector_or_text: str) -> Tuple[bool, str, str]:
         """
         Clicca su un elemento.
 
@@ -134,37 +133,40 @@ class BrowserManager:
 
         try:
             # Prova prima come selettore CSS
-            element = await self._page.query_selector(selector_or_text)
+            element = self._page.query_selector(selector_or_text)
 
             if not element:
                 # Prova con il testo
-                element = await self._page.query_selector(f'text="{selector_or_text}"')
+                element = self._page.query_selector(f'text="{selector_or_text}"')
 
             if not element:
                 # Prova con ricerca piu' flessibile
-                element = await self._find_element_by_text(selector_or_text)
+                element = self._find_element_by_text(selector_or_text)
 
             if element:
-                await element.click()
-                await self._page.wait_for_load_state('networkidle', timeout=10000)
+                element.click()
+                try:
+                    self._page.wait_for_load_state('networkidle', timeout=10000)
+                except Exception:
+                    pass
             else:
                 return False, "", self._page.url
 
         except Exception:
             try:
-                await self._page.wait_for_load_state('domcontentloaded', timeout=5000)
+                self._page.wait_for_load_state('domcontentloaded', timeout=5000)
             except Exception:
                 pass
 
-        await self._page.wait_for_timeout(1000)
-        await self._try_dismiss_cookies()
+        self._page.wait_for_timeout(1000)
+        self._try_dismiss_cookies()
 
-        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_bytes = self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return True, screenshot_b64, self._page.url
 
-    async def scroll_down(self) -> Tuple[str, str]:
+    def scroll_down(self) -> Tuple[str, str]:
         """
         Scrolla la pagina verso il basso.
 
@@ -174,15 +176,15 @@ class BrowserManager:
         if not self._page:
             return "", ""
 
-        await self._page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
-        await self._page.wait_for_timeout(500)
+        self._page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
+        self._page.wait_for_timeout(500)
 
-        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_bytes = self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return screenshot_b64, self._page.url
 
-    async def scroll_up(self) -> Tuple[str, str]:
+    def scroll_up(self) -> Tuple[str, str]:
         """
         Scrolla la pagina verso l'alto.
 
@@ -192,15 +194,15 @@ class BrowserManager:
         if not self._page:
             return "", ""
 
-        await self._page.evaluate('window.scrollBy(0, -window.innerHeight * 0.8)')
-        await self._page.wait_for_timeout(500)
+        self._page.evaluate('window.scrollBy(0, -window.innerHeight * 0.8)')
+        self._page.wait_for_timeout(500)
 
-        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_bytes = self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return screenshot_b64, self._page.url
 
-    async def go_back(self) -> Tuple[str, str]:
+    def go_back(self) -> Tuple[str, str]:
         """
         Torna alla pagina precedente.
 
@@ -210,15 +212,15 @@ class BrowserManager:
         if not self._page:
             return "", ""
 
-        await self._page.go_back()
-        await self._page.wait_for_timeout(1000)
+        self._page.go_back()
+        self._page.wait_for_timeout(1000)
 
-        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_bytes = self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return screenshot_b64, self._page.url
 
-    async def get_screenshot(self) -> str:
+    def get_screenshot(self) -> str:
         """
         Cattura uno screenshot della pagina corrente.
 
@@ -228,7 +230,7 @@ class BrowserManager:
         if not self._page:
             return ""
 
-        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_bytes = self._page.screenshot(full_page=False)
         return base64.b64encode(screenshot_bytes).decode('utf-8')
 
     def get_current_url(self) -> str:
@@ -237,30 +239,30 @@ class BrowserManager:
             return ""
         return self._page.url
 
-    async def _try_dismiss_cookies(self) -> bool:
+    def _try_dismiss_cookies(self) -> bool:
         """
         Tenta di chiudere cookie banner. Best effort.
 
         Returns:
             True se un banner e' stato chiuso
         """
-        await self._page.wait_for_timeout(1000)
+        self._page.wait_for_timeout(1000)
 
         for selector in COOKIE_SELECTORS:
             try:
-                element = await self._page.query_selector(selector)
+                element = self._page.query_selector(selector)
                 if element:
-                    is_visible = await element.is_visible()
+                    is_visible = element.is_visible()
                     if is_visible:
-                        await element.click()
-                        await self._page.wait_for_timeout(500)
+                        element.click()
+                        self._page.wait_for_timeout(500)
                         return True
             except Exception:
                 continue
 
         return False
 
-    async def _find_element_by_text(self, text: str):
+    def _find_element_by_text(self, text: str):
         """
         Trova un elemento tramite testo contenuto.
 
@@ -273,30 +275,30 @@ class BrowserManager:
         text_lower = text.lower()
 
         # Cerca in link
-        links = await self._page.query_selector_all('a')
+        links = self._page.query_selector_all('a')
         for link in links:
             try:
-                link_text = await link.inner_text()
+                link_text = link.inner_text()
                 if text_lower in link_text.lower():
                     return link
             except Exception:
                 continue
 
         # Cerca in bottoni
-        buttons = await self._page.query_selector_all('button')
+        buttons = self._page.query_selector_all('button')
         for button in buttons:
             try:
-                button_text = await button.inner_text()
+                button_text = button.inner_text()
                 if text_lower in button_text.lower():
                     return button
             except Exception:
                 continue
 
         # Cerca in elementi con role
-        clickables = await self._page.query_selector_all('[role="button"], [role="link"]')
+        clickables = self._page.query_selector_all('[role="button"], [role="link"]')
         for elem in clickables:
             try:
-                elem_text = await elem.inner_text()
+                elem_text = elem.inner_text()
                 if text_lower in elem_text.lower():
                     return elem
             except Exception:
