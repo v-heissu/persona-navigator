@@ -468,7 +468,7 @@ def render_screenshot():
     if st.session_state.current_screenshot_b64:
         st.image(
             f"data:image/png;base64,{st.session_state.current_screenshot_b64}",
-            use_container_width=True
+            use_column_width=True
         )
 
 
