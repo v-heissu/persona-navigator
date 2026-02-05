@@ -329,6 +329,59 @@ async def websocket_endpoint(websocket: WebSocket):
                     "persona_name": persona.name.split(" - ")[0]
                 })
 
+            # === FULL_SCAN: scrolla tutta la pagina e valuta nell'interezza ===
+            elif action == "full_scan":
+                if not browser or not claude:
+                    continue
+
+                await send("status", {"message": "Scansione pagina completa..."})
+
+                persona = get_active_persona()
+                system_prompt = get_system_prompt(persona, site_context=site_context)
+
+                # Capture all sections
+                screenshots = await browser.capture_full_page()
+                n = len(screenshots)
+
+                if n == 0:
+                    await send("error", {"message": "Nessuno screenshot catturato"})
+                    continue
+
+                await send("status", {
+                    "message": f"Catturate {n} sezioni. La persona sta analizzando..."
+                })
+
+                # Send all screenshots to AI in one request
+                scan_prompt = (
+                    f"Ti mostro l'INTERA pagina ({get_page_label(current_page_type)}) "
+                    f"divisa in {n} sezioni dall'alto verso il basso. "
+                    "Analizza la pagina nella sua interezza: struttura, contenuti, "
+                    "UX, gerarchia visiva, cosa funziona e cosa miglioreresti. "
+                    "Dai una valutazione completa e strutturata."
+                )
+
+                review = await claude.chat_multi_image(
+                    system_prompt=system_prompt,
+                    user_message=scan_prompt,
+                    images_base64=screenshots,
+                    conversation_history=conversation_messages
+                )
+
+                history.append(format_history_entry(
+                    entry_type="comment", timestamp=get_current_timestamp(),
+                    content=f"[Scansione completa] {review}"
+                ))
+                conversation_messages.append({"role": "assistant", "content": review})
+
+                # Restore current screenshot to what user was looking at
+                current_screenshot = await browser.get_screenshot()
+
+                await send("full_scan_result", {
+                    "review": review,
+                    "sections": n,
+                    "persona_name": persona.name.split(" - ")[0]
+                })
+
             # === NAVIGATE_URL: navigate to a new URL in-session ===
             elif action == "navigate_url":
                 if not browser:

@@ -1,7 +1,7 @@
 """Playwright wrapper per browser automation (async API)."""
 
 import base64
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from urllib.parse import urlparse, urlunparse
 from playwright.async_api import async_playwright, Browser, Page, BrowserContext
 
@@ -262,6 +262,51 @@ class BrowserManager:
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return screenshot_b64, self._page.url
+
+    async def capture_full_page(self) -> List[str]:
+        """Scrolla tutta la pagina catturando uno screenshot per ogni viewport.
+
+        Ritorna una lista di screenshot base64 (top→bottom).
+        Alla fine torna alla posizione di scroll originale.
+        """
+        if not self._page:
+            return []
+
+        # Get page dimensions
+        dims = await self._page.evaluate('''() => ({
+            scrollY: window.scrollY,
+            scrollHeight: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight
+        })''')
+
+        original_scroll = dims['scrollY']
+        total_height = dims['scrollHeight']
+        vp_height = dims['viewportHeight']
+
+        screenshots = []
+
+        # Scroll to top first
+        await self._page.evaluate('window.scrollTo(0, 0)')
+        await self._page.wait_for_timeout(200)
+
+        scroll_pos = 0
+        max_sections = 15  # safety cap
+
+        while scroll_pos < total_height and len(screenshots) < max_sections:
+            screenshot_bytes = await self._page.screenshot(full_page=False)
+            screenshots.append(base64.b64encode(screenshot_bytes).decode('utf-8'))
+
+            scroll_pos += int(vp_height * 0.85)  # small overlap between sections
+            if scroll_pos >= total_height:
+                break
+
+            await self._page.evaluate(f'window.scrollTo(0, {scroll_pos})')
+            await self._page.wait_for_timeout(250)
+
+        # Restore original scroll position
+        await self._page.evaluate(f'window.scrollTo(0, {original_scroll})')
+
+        return screenshots
 
     async def go_back(self) -> Tuple[str, str]:
         """Torna alla pagina precedente."""
