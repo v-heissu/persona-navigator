@@ -5,6 +5,12 @@ from typing import Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 from playwright.async_api import async_playwright, Browser, Page, BrowserContext
 
+# Viewport presets
+DESKTOP_VIEWPORT = {'width': 1280, 'height': 800}
+MOBILE_VIEWPORT = {'width': 390, 'height': 844}
+
+DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
 
 # Selettori comuni per cookie banner
 COOKIE_SELECTORS = [
@@ -48,8 +54,8 @@ class BrowserManager:
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
 
-    async def start(self) -> None:
-        """Avvia il browser."""
+    async def start(self, viewport: str = "desktop") -> None:
+        """Avvia il browser con viewport desktop o mobile."""
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(
             headless=True,
@@ -60,10 +66,18 @@ class BrowserManager:
                 '--disable-gpu'
             ]
         )
+
+        is_mobile = viewport == "mobile"
+        vp = MOBILE_VIEWPORT if is_mobile else DESKTOP_VIEWPORT
+        ua = MOBILE_UA if is_mobile else DESKTOP_UA
+        self._current_viewport = viewport
+
         self._context = await self._browser.new_context(
-            viewport={'width': 1280, 'height': 800},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            locale='it-IT'
+            viewport=vp,
+            user_agent=ua,
+            locale='it-IT',
+            is_mobile=is_mobile,
+            has_touch=is_mobile
         )
         self._page = await self._context.new_page()
 
@@ -214,6 +228,56 @@ class BrowserManager:
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
 
         return screenshot_b64, self._page.url
+
+    async def set_viewport(self, viewport: str) -> Tuple[str, str]:
+        """Cambia viewport (desktop/mobile) ricreando il contesto browser."""
+        if not self._browser:
+            return "", ""
+
+        current_url = self._page.url if self._page else ""
+        self._current_viewport = viewport
+
+        # Chiudi contesto corrente
+        if self._page:
+            await self._page.close()
+        if self._context:
+            await self._context.close()
+
+        # Ricrea contesto con nuovo viewport
+        is_mobile = viewport == "mobile"
+        vp = MOBILE_VIEWPORT if is_mobile else DESKTOP_VIEWPORT
+        ua = MOBILE_UA if is_mobile else DESKTOP_UA
+
+        self._context = await self._browser.new_context(
+            viewport=vp,
+            user_agent=ua,
+            locale='it-IT',
+            is_mobile=is_mobile,
+            has_touch=is_mobile
+        )
+        self._page = await self._context.new_page()
+
+        # Ri-naviga all'URL corrente
+        if current_url and current_url != "about:blank":
+            try:
+                await self._page.goto(current_url, wait_until='networkidle', timeout=30000)
+            except Exception:
+                try:
+                    await self._page.goto(current_url, wait_until='domcontentloaded', timeout=30000)
+                except Exception:
+                    pass
+            await self._page.wait_for_timeout(1000)
+            await self._try_dismiss_cookies()
+
+        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+        return screenshot_b64, self._page.url
+
+    def get_viewport_size(self) -> dict:
+        """Restituisce le dimensioni del viewport corrente."""
+        if hasattr(self, '_current_viewport') and self._current_viewport == "mobile":
+            return MOBILE_VIEWPORT
+        return DESKTOP_VIEWPORT
 
     async def get_screenshot(self) -> str:
         """Cattura uno screenshot della pagina corrente."""

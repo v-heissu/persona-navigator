@@ -1,7 +1,7 @@
-"""Definizioni delle personas e prompt templates per Personas Navigator."""
+"""Definizioni delle personas e prompt templates per Hybrid UX Inspector."""
 
-from dataclasses import dataclass
-from typing import Dict, List
+from dataclasses import dataclass, replace as dataclass_replace
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -11,6 +11,22 @@ class Persona:
     name: str
     short_description: str
     full_profile: str
+    icon: str = ""
+    color: str = "#7c5cfc"
+
+
+def customize_persona(persona: Persona, custom_profile: str = "", custom_name: str = "", custom_description: str = "") -> Persona:
+    """Crea una copia della persona con profilo personalizzato."""
+    updates = {}
+    if custom_profile:
+        updates["full_profile"] = custom_profile
+    if custom_name:
+        updates["name"] = custom_name
+    if custom_description:
+        updates["short_description"] = custom_description
+    if updates:
+        return dataclass_replace(persona, **updates)
+    return persona
 
 
 PERSONAS: Dict[str, Persona] = {
@@ -18,6 +34,8 @@ PERSONAS: Dict[str, Persona] = {
         id="marco",
         name="Marco - Casual Foodie",
         short_description="28-45 anni, expertise intermedia, cerca convivialita' e occasioni speciali",
+        icon="🍽️",
+        color="#fb923c",
         full_profile="""Marco - Casual Foodie
 
 DEMOGRAFIA: 28-45 anni, expertise gastronomica intermedia
@@ -46,6 +64,8 @@ TONO DI VOCE: Diretto, alla mano, usa espressioni colloquiali. Non ha paura di d
         id="giulia",
         name="Giulia - Active Foodie",
         short_description="35-50 anni, expertise avanzata, early adopter, cerca esperienze uniche",
+        icon="✨",
+        color="#a78bfa",
         full_profile="""Giulia - Active Foodie
 
 DEMOGRAFIA: 35-50 anni, expertise gastronomica avanzata
@@ -74,6 +94,8 @@ TONO DI VOCE: Competente ma non saccente, usa terminologia corretta, fa confront
         id="roberto",
         name="Roberto - Super Foodie",
         short_description="40-65 anni, expertise elevata, fine dining settimanale, network gastronomico",
+        icon="🎩",
+        color="#f472b6",
         full_profile="""Roberto - Super Foodie
 
 DEMOGRAFIA: 40-65 anni, expertise gastronomica elevata
