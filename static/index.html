@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personas Navigator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#282834;
+  --text:#e4e4ef;--text2:#9d9db5;--text3:#6b6b82;
+  --accent:#7c5cfc;--accent2:#9b7dff;--accent-glow:rgba(124,92,252,.15);
+  --green:#34d399;--orange:#fb923c;--red:#f87171;--blue:#60a5fa;
+  --radius:12px;--radius-sm:8px;
+}
+html{font-size:15px}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Layout */
+.app{display:flex;flex-direction:column;height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--bg3);background:var(--bg2)}
+header h1{font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:10px}
+header h1 span{font-size:1.5rem}
+.header-status{font-size:.8rem;color:var(--text3);display:flex;align-items:center;gap:8px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}
+.status-dot.connected{background:var(--green);box-shadow:0 0 8px var(--green)}
+.status-dot.loading{background:var(--orange);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Setup screen */
+#setup{display:flex;align-items:center;justify-content:center;flex:1;padding:24px}
+.setup-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:40px;max-width:520px;width:100%}
+.setup-card h2{font-size:1.5rem;margin-bottom:8px}
+.setup-card p{color:var(--text2);margin-bottom:32px;line-height:1.5}
+.field{margin-bottom:20px}
+.field label{display:block;font-size:.8rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.field select,.field input[type="text"],.field input[type="number"]{
+  width:100%;padding:12px 16px;background:var(--bg);border:1px solid var(--bg4);border-radius:var(--radius-sm);
+  color:var(--text);font-size:.95rem;outline:none;transition:border .2s}
+.field select:focus,.field input:focus{border-color:var(--accent)}
+.field select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239d9db5' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.field-desc{font-size:.8rem;color:var(--text3);margin-top:6px}
+.mode-toggle{display:flex;gap:8px;margin-bottom:20px}
+.mode-btn{flex:1;padding:12px;border:1px solid var(--bg4);border-radius:var(--radius-sm);background:var(--bg);color:var(--text2);font-size:.9rem;font-weight:500;cursor:pointer;transition:all .2s;text-align:center}
+.mode-btn.active{border-color:var(--accent);color:var(--text);background:var(--accent-glow)}
+.autonomous-opts{display:none;background:var(--bg);border-radius:var(--radius-sm);padding:16px;margin-bottom:20px;border:1px solid var(--bg4)}
+.autonomous-opts.visible{display:block}
+.btn-primary{width:100%;padding:14px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-size:1rem;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* Main session screen */
+#session{display:none;flex:1;overflow:hidden}
+.session-layout{display:grid;grid-template-columns:1fr 380px;height:100%}
+@media(max-width:900px){.session-layout{grid-template-columns:1fr}}
+
+/* Main panel */
+.main-panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--bg3)}
+.screenshot-area{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+.screenshot-frame{border-radius:var(--radius);overflow:hidden;border:1px solid var(--bg3);background:var(--bg2);position:relative}
+.screenshot-frame img{width:100%;display:block}
+.screenshot-frame .page-badge{position:absolute;top:12px;left:12px;background:rgba(15,15,19,.85);backdrop-filter:blur(8px);padding:6px 14px;border-radius:20px;font-size:.8rem;font-weight:500;display:flex;align-items:center;gap:6px}
+.screenshot-frame .url-bar{font-size:.75rem;color:var(--text3);padding:8px 14px;border-top:1px solid var(--bg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step-progress{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--text3)}
+.step-bar{flex:1;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.step-bar-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .5s ease}
+
+/* Comment bubble */
+.comment-bubble{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:16px 20px}
+.comment-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.comment-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;color:#fff}
+.comment-name{font-weight:600;font-size:.9rem}
+.comment-text{color:var(--text);line-height:1.6;font-size:.95rem}
+.comment-text em{color:var(--text2);font-style:normal}
+
+/* Action indicator */
+.action-indicator{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg3);border-radius:var(--radius-sm);font-size:.85rem}
+.action-indicator .action-icon{color:var(--accent)}
+.action-indicator .action-reason{color:var(--text2);font-style:italic}
+
+/* Autonomous controls */
+.auto-controls{display:none;padding:12px 20px;border-top:1px solid var(--bg3);background:var(--bg2);gap:8px}
+.auto-controls.visible{display:flex}
+.auto-controls button{padding:8px 20px;border-radius:var(--radius-sm);border:1px solid var(--bg4);background:var(--bg);color:var(--text);font-size:.85rem;cursor:pointer;transition:all .2s;font-weight:500}
+.auto-controls button:hover{border-color:var(--text3)}
+.auto-controls .btn-stop{border-color:var(--red);color:var(--red)}
+.auto-controls .btn-stop:hover{background:rgba(248,113,113,.1)}
+
+/* Input area */
+.input-area{padding:16px 20px;border-top:1px solid var(--bg3);background:var(--bg2)}
+.input-row{display:flex;gap:8px}
+.input-row input{flex:1;padding:12px 16px;background:var(--bg);border:1px solid var(--bg4);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none;transition:border .2s}
+.input-row input:focus{border-color:var(--accent)}
+.input-row button{padding:12px 24px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.input-row button:hover{background:var(--accent2)}
+.input-row button:disabled{opacity:.5;cursor:not-allowed}
+.suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.suggestions button{padding:6px 14px;background:var(--bg);border:1px solid var(--bg4);border-radius:20px;color:var(--text2);font-size:.8rem;cursor:pointer;transition:all .2s}
+.suggestions button:hover{border-color:var(--accent);color:var(--text)}
+
+/* Side panel */
+.side-panel{display:flex;flex-direction:column;background:var(--bg2);overflow:hidden}
+@media(max-width:900px){.side-panel{display:none}}
+.side-header{padding:16px 20px;border-bottom:1px solid var(--bg3);display:flex;align-items:center;justify-content:space-between}
+.side-header h3{font-size:.95rem;font-weight:600}
+.history-list{flex:1;overflow-y:auto;padding:12px 16px}
+.history-item{padding:10px 0;border-bottom:1px solid var(--bg3)}
+.history-item:last-child{border-bottom:none}
+.history-time{font-size:.7rem;color:var(--text3);margin-bottom:4px}
+.history-nav{font-size:.8rem;font-weight:600;color:var(--blue);display:flex;align-items:center;gap:6px}
+.history-comment{font-size:.8rem;color:var(--text2);line-height:1.4;margin-top:4px}
+.history-question{font-size:.8rem;color:var(--orange);font-weight:500;margin-top:4px}
+.history-answer{font-size:.8rem;color:var(--text2);line-height:1.4;margin-top:4px}
+.history-action{font-size:.75rem;color:var(--accent);margin-top:4px;display:flex;align-items:center;gap:4px}
+
+/* Side footer */
+.side-footer{padding:12px 16px;border-top:1px solid var(--bg3);display:flex;gap:8px}
+.side-footer button{flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.8rem;cursor:pointer;transition:all .2s;font-weight:500}
+.side-footer button:hover{border-color:var(--text3);color:var(--text)}
+
+/* Loading overlay */
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(15,15,19,.8);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.loading-overlay.visible{display:flex}
+.spinner{width:40px;height:40px;border:3px solid var(--bg4);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:var(--text2);font-size:.9rem}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;padding:14px 20px;background:var(--bg3);border:1px solid var(--bg4);border-radius:var(--radius-sm);color:var(--text);font-size:.85rem;z-index:200;transform:translateY(100px);opacity:0;transition:all .3s}
+.toast.visible{transform:translateY(0);opacity:1}
+.toast.error{border-color:var(--red);color:var(--red)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1><span>&#x1f3ad;</span> Personas Navigator</h1>
+    <div class="header-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnesso</span>
+    </div>
+  </header>
+
+  <!-- Setup Screen -->
+  <div id="setup">
+    <div class="setup-card">
+      <h2>Nuova sessione</h2>
+      <p>Simula la navigazione di un sito web attraverso gli occhi di una persona reale.</p>
+
+      <div class="field">
+        <label>Persona</label>
+        <select id="personaSelect"></select>
+        <div class="field-desc" id="personaDesc"></div>
+      </div>
+
+      <div class="field">
+        <label>URL del sito</label>
+        <input type="text" id="urlInput" placeholder="https://esempio.com">
+      </div>
+
+      <div class="field">
+        <label>Modalita'</label>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-mode="guided" onclick="setMode('guided')">Guidata</button>
+          <button class="mode-btn" data-mode="autonomous" onclick="setMode('autonomous')">Autonoma</button>
+        </div>
+      </div>
+
+      <div class="autonomous-opts" id="autonomousOpts">
+        <div class="field">
+          <label>Obiettivo</label>
+          <select id="objectiveSelect"></select>
+        </div>
+        <div class="field">
+          <label>Max pagine</label>
+          <input type="number" id="maxSteps" value="5" min="3" max="10">
+        </div>
+      </div>
+
+      <button class="btn-primary" id="startBtn" onclick="startSession()">Avvia navigazione</button>
+    </div>
+  </div>
+
+  <!-- Session Screen -->
+  <div id="session">
+    <div class="session-layout">
+      <div class="main-panel">
+        <div class="screenshot-area" id="screenshotArea">
+          <div class="screenshot-frame" id="screenshotFrame" style="display:none">
+            <img id="screenshotImg" src="" alt="Screenshot">
+            <div class="page-badge" id="pageBadge"></div>
+            <div class="url-bar" id="urlBar"></div>
+          </div>
+          <div id="stepProgress" class="step-progress" style="display:none">
+            <span id="stepText"></span>
+            <div class="step-bar"><div class="step-bar-fill" id="stepBarFill"></div></div>
+          </div>
+          <div id="commentArea"></div>
+          <div id="actionArea"></div>
+        </div>
+
+        <div class="auto-controls" id="autoControls">
+          <button onclick="pauseAutonomous()" id="pauseBtn">Pausa</button>
+          <button onclick="skipWait()">Salta attesa</button>
+          <button class="btn-stop" onclick="stopAutonomous()">Stop &rarr; Q&amp;A</button>
+        </div>
+
+        <div class="input-area" id="inputArea">
+          <div class="input-row">
+            <input type="text" id="chatInput" placeholder="Scrivi un comando o una domanda..."
+                   onkeydown="if(event.key==='Enter')sendInput()">
+            <button onclick="sendInput()" id="sendBtn">Invia</button>
+          </div>
+          <div class="suggestions" id="suggestionsArea"></div>
+        </div>
+      </div>
+
+      <div class="side-panel">
+        <div class="side-header">
+          <h3>Cronologia</h3>
+          <span style="font-size:.75rem;color:var(--text3)" id="historyCount"></span>
+        </div>
+        <div class="history-list" id="historyList"></div>
+        <div class="side-footer">
+          <button onclick="exportSession()">Esporta MD</button>
+          <button onclick="newSession()">Nuova sessione</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Caricamento...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let ws = null;
+let currentMode = 'guided';
+let isAutonomousRunning = false;
+let isPaused = false;
+let personas = [];
+let objectives = [];
+
+// === Init ===
+document.addEventListener('DOMContentLoaded', async () => {
+  const [pRes, oRes] = await Promise.all([
+    fetch('/api/personas'), fetch('/api/objectives')
+  ]);
+  personas = await pRes.json();
+  objectives = await oRes.json();
+
+  const sel = document.getElementById('personaSelect');
+  personas.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => {
+    const p = personas.find(x => x.id === sel.value);
+    document.getElementById('personaDesc').textContent = p ? p.description : '';
+  });
+  sel.dispatchEvent(new Event('change'));
+
+  const oSel = document.getElementById('objectiveSelect');
+  objectives.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.id; opt.textContent = o.label;
+    oSel.appendChild(opt);
+  });
+
+  connectWebSocket();
+});
+
+// === WebSocket ===
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    document.getElementById('statusDot').className = 'status-dot connected';
+    document.getElementById('statusText').textContent = 'Connesso';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('statusDot').className = 'status-dot';
+    document.getElementById('statusText').textContent = 'Disconnesso';
+    setTimeout(connectWebSocket, 3000);
+  };
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    handleEvent(data);
+  };
+}
+
+function sendWS(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+}
+
+// === Event Handler ===
+function handleEvent(data) {
+  const event = data.event;
+
+  if (event === 'status') {
+    document.getElementById('loadingText').textContent = data.message;
+  }
+
+  else if (event === 'navigation') {
+    hideLoading();
+    showSession();
+    updateScreenshot(data);
+    updateComment(data.persona_name, data.comment);
+    updateSuggestions(data.suggestions || []);
+    updateHistory(data.history || []);
+    if (data.step && data.max_steps) updateProgress(data.step, data.max_steps);
+  }
+
+  else if (event === 'autonomous_step') {
+    hideLoading();
+    updateScreenshot(data);
+    updateComment(data.persona_name, data.comment);
+    if (data.action && data.action !== 'DONE') {
+      showAction(data.action, data.target, data.reasoning);
+    }
+    updateSuggestions(data.suggestions || []);
+    updateHistory(data.history || []);
+    updateProgress(data.step, data.max_steps);
+  }
+
+  else if (event === 'autonomous_done') {
+    isAutonomousRunning = false;
+    document.getElementById('autoControls').classList.remove('visible');
+    document.getElementById('inputArea').style.display = '';
+    updateHistory(data.history || []);
+    showToast('Navigazione completata - puoi fare domande');
+  }
+
+  else if (event === 'answer') {
+    hideLoading();
+    showAnswer(data.persona_name, data.question, data.answer);
+    updateHistory(data.history || []);
+  }
+
+  else if (event === 'export') {
+    downloadMarkdown(data.markdown);
+  }
+
+  else if (event === 'error') {
+    hideLoading();
+    showToast(data.message, true);
+  }
+}
+
+// === Setup ===
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  document.getElementById('autonomousOpts').classList.toggle('visible', mode === 'autonomous');
+}
+
+function startSession() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { showToast('Inserisci un URL', true); return; }
+
+  const msg = {
+    action: 'start',
+    persona_id: document.getElementById('personaSelect').value,
+    url: url,
+    mode: currentMode,
+    max_steps: parseInt(document.getElementById('maxSteps').value) || 5,
+    objective: document.getElementById('objectiveSelect').value
+  };
+
+  showLoading('Avvio browser...');
+  sendWS(msg);
+
+  if (currentMode === 'autonomous') {
+    isAutonomousRunning = true;
+  }
+}
+
+// === Session UI ===
+function showSession() {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('session').style.display = '';
+
+  if (isAutonomousRunning) {
+    document.getElementById('autoControls').classList.add('visible');
+    document.getElementById('inputArea').style.display = 'none';
+  }
+}
+
+function updateScreenshot(data) {
+  const frame = document.getElementById('screenshotFrame');
+  frame.style.display = '';
+  document.getElementById('screenshotImg').src = 'data:image/png;base64,' + data.screenshot;
+  document.getElementById('pageBadge').textContent = data.page_label || '';
+  document.getElementById('urlBar').textContent = data.url || '';
+}
+
+function updateComment(name, text) {
+  if (!text) return;
+  const area = document.getElementById('commentArea');
+  const initial = name ? name.charAt(0).toUpperCase() : '?';
+  area.innerHTML = `
+    <div class="comment-bubble">
+      <div class="comment-header">
+        <div class="comment-avatar">${initial}</div>
+        <div class="comment-name">${name || 'Persona'}</div>
+      </div>
+      <div class="comment-text">${escapeHtml(text)}</div>
+    </div>`;
+  area.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function showAction(action, target, reasoning) {
+  const area = document.getElementById('actionArea');
+  let label = action;
+  if (action === 'CLICK' && target) label = `Click su "${target}"`;
+  else if (action === 'SCROLL_DOWN') label = 'Scroll giu\'';
+  else if (action === 'BACK') label = 'Torna indietro';
+
+  area.innerHTML = `
+    <div class="action-indicator">
+      <span class="action-icon">&#x27A1;</span>
+      <span><strong>Prossima azione:</strong> ${escapeHtml(label)}</span>
+      ${reasoning ? `<span class="action-reason">"${escapeHtml(reasoning)}"</span>` : ''}
+    </div>`;
+}
+
+function showAnswer(name, question, answer) {
+  const area = document.getElementById('commentArea');
+  const initial = name ? name.charAt(0).toUpperCase() : '?';
+  const prev = area.innerHTML;
+  area.innerHTML = prev + `
+    <div style="margin-top:12px; padding:10px 16px; background:var(--bg3); border-radius:var(--radius-sm); font-size:.85rem;">
+      <span style="color:var(--orange); font-weight:500;">Domanda:</span> ${escapeHtml(question)}
+    </div>
+    <div class="comment-bubble" style="margin-top:8px">
+      <div class="comment-header">
+        <div class="comment-avatar">${initial}</div>
+        <div class="comment-name">${name || 'Persona'}</div>
+      </div>
+      <div class="comment-text">${escapeHtml(answer)}</div>
+    </div>`;
+  area.lastElementChild.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function updateSuggestions(suggestions) {
+  const area = document.getElementById('suggestionsArea');
+  area.innerHTML = suggestions.map(s =>
+    `<button onclick="sendSuggestion(this.textContent)">${escapeHtml(s)}</button>`
+  ).join('');
+}
+
+function updateProgress(step, max) {
+  const prog = document.getElementById('stepProgress');
+  prog.style.display = '';
+  document.getElementById('stepText').textContent = `Step ${step}/${max}`;
+  document.getElementById('stepBarFill').style.width = `${(step/max)*100}%`;
+}
+
+function updateHistory(history) {
+  const list = document.getElementById('historyList');
+  const count = document.getElementById('historyCount');
+  if (!history || !history.length) return;
+
+  count.textContent = `${history.length} voci`;
+  let html = '';
+
+  for (const entry of history) {
+    html += '<div class="history-item">';
+    html += `<div class="history-time">${entry.timestamp || ''}</div>`;
+
+    if (entry.type === 'navigation') {
+      const labels = {homepage:'Homepage',menu:'Menu',booking:'Prenotazione',about:'Chi siamo',gallery:'Galleria',contact:'Contatti',other:'Pagina'};
+      html += `<div class="history-nav">&#x1F4CD; ${labels[entry.page_type] || 'Pagina'}</div>`;
+    } else if (entry.type === 'comment') {
+      const t = (entry.content||'').substring(0,80);
+      html += `<div class="history-comment">"${escapeHtml(t)}${entry.content && entry.content.length > 80 ? '...' : ''}"</div>`;
+    } else if (entry.type === 'question') {
+      html += `<div class="history-question">&#x2753; ${escapeHtml(entry.content||'')}</div>`;
+    } else if (entry.type === 'answer') {
+      const t = (entry.content||'').substring(0,80);
+      html += `<div class="history-answer">${escapeHtml(t)}${entry.content && entry.content.length > 80 ? '...' : ''}</div>`;
+    } else if (entry.type === 'action') {
+      const a = entry.action || {};
+      html += `<div class="history-action">&#x27A1; ${a.type||''} ${a.target ? ': '+escapeHtml(a.target) : ''}</div>`;
+    }
+
+    html += '</div>';
+  }
+
+  list.innerHTML = html;
+  list.scrollTop = list.scrollHeight;
+}
+
+// === Input ===
+function sendInput() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  showLoading('Analizzo...');
+  sendWS({action:'input', text});
+}
+
+function sendSuggestion(text) {
+  showLoading('Analizzo...');
+  sendWS({action:'input', text});
+}
+
+// === Autonomous controls ===
+function pauseAutonomous() {
+  if (isPaused) {
+    isPaused = false;
+    sendWS({action:'resume_autonomous'});
+    document.getElementById('pauseBtn').textContent = 'Pausa';
+    document.getElementById('inputArea').style.display = 'none';
+  } else {
+    isPaused = true;
+    sendWS({action:'pause_autonomous'});
+    document.getElementById('pauseBtn').textContent = 'Riprendi';
+    document.getElementById('inputArea').style.display = '';
+  }
+}
+
+function skipWait() {
+  // Server will continue on next step
+}
+
+function stopAutonomous() {
+  isAutonomousRunning = false;
+  sendWS({action:'stop_autonomous'});
+}
+
+// === Export ===
+function exportSession() {
+  sendWS({action:'export', mode: currentMode, objective: document.getElementById('objectiveSelect').value});
+}
+
+function downloadMarkdown(md) {
+  const blob = new Blob([md], {type:'text/markdown'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sessione_${new Date().toISOString().slice(0,16).replace(/[:-]/g,'')}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Export scaricato');
+}
+
+// === New session ===
+function newSession() {
+  location.reload();
+}
+
+// === Utils ===
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Caricamento...';
+  document.getElementById('loadingOverlay').classList.add('visible');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('visible');
+}
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast visible' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
