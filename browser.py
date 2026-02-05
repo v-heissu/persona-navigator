@@ -170,6 +170,38 @@ class BrowserManager:
 
         return screenshot_b64, self._page.url
 
+    async def click_at(self, x: int, y: int) -> Tuple[str, str]:
+        """Clicca alle coordinate (x, y) del viewport."""
+        if not self._page:
+            return "", ""
+
+        await self._page.mouse.click(x, y)
+        try:
+            await self._page.wait_for_load_state('networkidle', timeout=10000)
+        except Exception:
+            pass
+
+        await self._page.wait_for_timeout(1000)
+        await self._try_dismiss_cookies()
+
+        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+
+        return screenshot_b64, self._page.url
+
+    async def scroll_by(self, delta_y: int) -> Tuple[str, str]:
+        """Scrolla la pagina di delta_y pixel."""
+        if not self._page:
+            return "", ""
+
+        await self._page.evaluate(f'window.scrollBy(0, {delta_y})')
+        await self._page.wait_for_timeout(500)
+
+        screenshot_bytes = await self._page.screenshot(full_page=False)
+        screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+
+        return screenshot_b64, self._page.url
+
     async def go_back(self) -> Tuple[str, str]:
         """Torna alla pagina precedente."""
         if not self._page:

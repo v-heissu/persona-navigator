@@ -289,6 +289,76 @@ async def websocket_endpoint(websocket: WebSocket):
                         "history": history
                     })
 
+            # === CLICK: Click diretto sullo screenshot ===
+            elif action == "click":
+                if not browser:
+                    continue
+
+                x = msg.get("x", 0)
+                y = msg.get("y", 0)
+
+                screenshot, new_url = await browser.click_at(int(x), int(y))
+                new_page_type = await detect_page_type(screenshot, claude)
+
+                current_url = new_url
+                current_page_type = new_page_type
+                current_screenshot = screenshot
+
+                # Commento persona
+                persona = get_persona(persona_id)
+                system_prompt = get_system_prompt(persona)
+
+                comment = await claude.chat(
+                    system_prompt=system_prompt,
+                    user_message=f"Sei appena arrivato su questa pagina ({get_page_label(new_page_type)}). Cosa ne pensi? (2-3 frasi)",
+                    conversation_history=conversation_messages,
+                    image_base64=screenshot
+                )
+
+                history.append(format_history_entry(
+                    entry_type="navigation",
+                    timestamp=get_current_timestamp(),
+                    page_type=new_page_type,
+                    url=new_url,
+                    screenshot_b64=screenshot
+                ))
+                history.append(format_history_entry(
+                    entry_type="comment",
+                    timestamp=get_current_timestamp(),
+                    content=comment
+                ))
+                conversation_messages.append({
+                    "role": "assistant",
+                    "content": comment
+                })
+
+                await send("navigation", {
+                    "screenshot": screenshot,
+                    "url": new_url,
+                    "page_type": new_page_type,
+                    "page_label": get_page_label(new_page_type),
+                    "comment": comment,
+                    "persona_name": persona.name.split(" - ")[0],
+                    "suggestions": get_suggestions(new_page_type),
+                    "history": history
+                })
+
+            # === SCROLL: Scroll diretto sullo screenshot ===
+            elif action == "scroll":
+                if not browser:
+                    continue
+
+                delta = msg.get("delta", 300)
+                screenshot, new_url = await browser.scroll_by(int(delta))
+
+                current_url = new_url
+                current_screenshot = screenshot
+
+                await send("screenshot_update", {
+                    "screenshot": screenshot,
+                    "url": new_url
+                })
+
             # === EXPORT ===
             elif action == "export":
                 md = export_session(

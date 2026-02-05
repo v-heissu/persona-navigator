@@ -63,8 +63,10 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .browser-topbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--bg3);flex-shrink:0}
 .browser-url{flex:1;font-size:.75rem;color:var(--text3);padding:6px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--bg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .browser-badge{font-size:.7rem;font-weight:600;color:var(--accent);padding:4px 10px;background:var(--accent-glow);border-radius:12px;white-space:nowrap}
-.browser-viewport{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:0;background:#111}
-.browser-viewport img{width:100%;display:block;max-height:100%;object-fit:contain}
+.browser-viewport{flex:1;overflow:hidden;display:flex;align-items:flex-start;justify-content:center;padding:0;background:#111;position:relative}
+.browser-viewport img{width:100%;display:block;max-height:100%;object-fit:contain;cursor:pointer}
+.click-ripple{position:absolute;width:20px;height:20px;border-radius:50%;background:rgba(124,92,252,.5);border:2px solid var(--accent);transform:translate(-50%,-50%);pointer-events:none;animation:ripple .6s ease-out forwards}
+@keyframes ripple{0%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
 .browser-viewport .empty-state{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.9rem}
 .browser-footer{display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--bg2);border-top:1px solid var(--bg3);flex-shrink:0}
 .step-text{font-size:.7rem;color:var(--text3)}
@@ -329,6 +331,11 @@ function handleEvent(data) {
     addChatMessage(data.persona_name, data.answer);
   }
 
+  else if (ev === 'screenshot_update') {
+    hideLoading();
+    updateScreenshotOnly(data);
+  }
+
   else if (ev === 'export') {
     downloadMarkdown(data.markdown);
   }
@@ -391,6 +398,10 @@ function showSession() {
   }
 }
 
+// Viewport dimensions (must match browser.py context)
+const VP_WIDTH = 1280;
+const VP_HEIGHT = 800;
+
 function updateBrowser(data) {
   // Show topbar
   const topbar = document.getElementById('browserTopbar');
@@ -400,10 +411,52 @@ function updateBrowser(data) {
 
   // Show screenshot
   const viewport = document.getElementById('browserViewport');
-  viewport.innerHTML = `<img src="data:image/png;base64,${data.screenshot}" alt="Screenshot">`;
+  viewport.innerHTML = `<img src="data:image/png;base64,${data.screenshot}" alt="Screenshot" id="screenshotImg">`;
+  bindScreenshotEvents();
 
   // Show footer
   document.getElementById('browserFooter').style.display = '';
+}
+
+function updateScreenshotOnly(data) {
+  const img = document.getElementById('screenshotImg');
+  if (img) img.src = 'data:image/png;base64,' + data.screenshot;
+  if (data.url) document.getElementById('urlBar').textContent = data.url;
+}
+
+function bindScreenshotEvents() {
+  const img = document.getElementById('screenshotImg');
+  if (!img) return;
+
+  // Click handler
+  img.addEventListener('click', (e) => {
+    if (isAutonomousRunning) return;
+    const rect = img.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
+    const vpX = Math.round(relX * VP_WIDTH);
+    const vpY = Math.round(relY * VP_HEIGHT);
+
+    // Visual feedback
+    const viewport = document.getElementById('browserViewport');
+    const ripple = document.createElement('div');
+    ripple.className = 'click-ripple';
+    ripple.style.left = e.clientX - viewport.getBoundingClientRect().left + 'px';
+    ripple.style.top = e.clientY - viewport.getBoundingClientRect().top + 'px';
+    viewport.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+
+    showLoading('Click...');
+    sendWS({ action: 'click', x: vpX, y: vpY });
+  });
+
+  // Scroll handler
+  img.addEventListener('wheel', (e) => {
+    if (isAutonomousRunning) return;
+    e.preventDefault();
+    const delta = Math.round(e.deltaY * 2);
+    sendWS({ action: 'scroll', delta: delta });
+  }, { passive: false });
 }
 
 function updateProgress(step, max) {
