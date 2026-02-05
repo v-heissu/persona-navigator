@@ -111,25 +111,38 @@ def get_all_personas() -> List[Persona]:
     return list(PERSONAS.values())
 
 
-def get_system_prompt(persona: Persona) -> str:
+def get_system_prompt(persona: Persona, site_context: str = "") -> str:
     """Genera il prompt di sistema per una persona."""
+    context_block = ""
+    if site_context:
+        context_block = f"""
+
+CONTESTO DEL SITO CHE STAI NAVIGANDO:
+{site_context}
+
+IMPORTANTE: Usa questo contesto per capire cosa e' il sito, cosa offre, e reagisci
+di conseguenza. Non fare ipotesi su funzionalita' che non esistono (es. non cercare
+prenotazioni se il sito non le offre). Reagisci a quello che VEDI e a quello che SAI
+dal contesto."""
+
     return f"""Sei {persona.name.split(' - ')[0]}, una persona reale che sta navigando un sito web.
 
 PROFILO:
 {persona.full_profile}
+{context_block}
 
 ISTRUZIONI COMPORTAMENTALI:
 - Commenta come parleresti davvero, con il tuo vocabolario e tono
 - Esprimi reazioni autentiche: dubbi, entusiasmi, perplessita', noia
-- Non sei un esperto UX o un consulente - sei un potenziale cliente
+- Non sei un esperto UX o un consulente - sei un potenziale utente
 - Se qualcosa non ti e' chiaro, dillo con le tue parole
 - Se qualcosa ti attrae o ti respinge, spiega perche' emotivamente
 - Mantieni coerenza con il tuo profilo in ogni risposta
 
 CAPACITA' AGGIUNTIVE:
 Puoi rispondere a domande sul tuo comportamento:
-- Come scopri nuovi ristoranti (canali, fonti, trigger)
-- Cosa cerchi online prima di prenotare
+- Come scopri nuovi contenuti/ristoranti/esperienze (canali, fonti, trigger)
+- Cosa cerchi online e come navighi
 - Chi influenza le tue scelte
 - Cosa ti farebbe tornare su un sito
 - Quali funzionalita' ti mancano di solito
@@ -151,16 +164,25 @@ def get_navigation_prompt(
     current_url: str,
     visited_pages: List[dict],
     current_step: int,
-    max_steps: int
+    max_steps: int,
+    site_context: str = ""
 ) -> str:
     """Genera il prompt per la navigazione autonoma."""
     visited_str = "\n".join([f"- {p['type']}: {p['url']}" for p in visited_pages]) if visited_pages else "Nessuna"
+
+    context_block = ""
+    if site_context:
+        context_block = f"""
+
+CONTESTO SITO:
+{site_context}
+"""
 
     return f"""Sei {persona.name.split(' - ')[0]}. Stai navigando questo sito per: {objective}
 
 PROFILO:
 {persona.full_profile}
-
+{context_block}
 STATO NAVIGAZIONE:
 - Pagina corrente: {page_type}
 - URL: {current_url}
@@ -192,32 +214,86 @@ Rispondi SOLO con questo JSON:
 }}"""
 
 
+def get_insights_prompt(
+    persona: Persona,
+    site_context: str,
+    conversation_summary: str
+) -> str:
+    """Genera il prompt per l'analisi insights/miglioramenti."""
+    context_block = ""
+    if site_context:
+        context_block = f"""
+
+CONTESTO SITO:
+{site_context}
+"""
+
+    return f"""Sei un UX researcher che ha osservato {persona.name.split(' - ')[0]} navigare un sito web.
+{context_block}
+PROFILO PERSONA OSSERVATA:
+{persona.full_profile}
+
+RIASSUNTO DELLA SESSIONE DI NAVIGAZIONE:
+{conversation_summary}
+
+Basandoti su quello che hai osservato, genera un report di insights strutturato.
+Rispondi in italiano, in modo concreto e azionabile.
+
+FORMATO OBBLIGATORIO - rispondi con queste sezioni:
+
+## Reazioni chiave
+Le 3-4 reazioni piu' significative della persona durante la navigazione.
+
+## Cosa ha funzionato
+Elementi del sito che hanno generato interesse, coinvolgimento o reazioni positive.
+
+## Cosa non ha funzionato
+Elementi che hanno generato confusione, disinteresse, frustrazione o che sono stati ignorati.
+
+## Bisogni non soddisfatti
+Cosa cercava questa persona che non ha trovato, o funzionalita'/contenuti che si aspettava.
+
+## Raccomandazioni per {persona.name}
+5-7 miglioramenti concreti e specifici per rendere il sito piu' efficace per questo tipo di persona. Ogni raccomandazione deve essere:
+- Specifica (non generica)
+- Collegata a un comportamento osservato
+- Attuabile dal team del sito
+
+## Priorita'
+Ordina le raccomandazioni per impatto (alto/medio/basso) e sforzo (alto/medio/basso)."""
+
+
 # Obiettivi per la navigazione autonoma
 OBJECTIVES = [
     {
-        "id": "evaluate_booking",
-        "label": "Valutare se prenotare",
-        "prompt": "Stai valutando se questo posto fa per te e se prenoteresti."
+        "id": "first_impression",
+        "label": "Prima impressione generale",
+        "prompt": "E' la tua prima volta su questo sito. Vuoi capire di cosa si tratta e se fa per te."
     },
     {
-        "id": "explore_menu",
-        "label": "Esplorare il menu",
-        "prompt": "Vuoi capire cosa offrono e se il menu ti interessa."
+        "id": "explore_content",
+        "label": "Esplorare i contenuti",
+        "prompt": "Vuoi capire che tipo di contenuti offrono e se sono interessanti per te."
     },
     {
         "id": "understand_concept",
-        "label": "Capire che tipo di locale e'",
-        "prompt": "Vuoi farti un'idea di che esperienza offrono."
+        "label": "Capire il concept/proposta",
+        "prompt": "Vuoi farti un'idea chiara di cosa propongono e quale valore offrono."
     },
     {
-        "id": "find_info",
-        "label": "Trovare info pratiche",
-        "prompt": "Cerchi informazioni pratiche: dove sono, orari, come prenotare."
+        "id": "find_specific",
+        "label": "Cercare qualcosa di specifico",
+        "prompt": "Hai un'esigenza precisa e vuoi capire se questo sito puo' aiutarti."
+    },
+    {
+        "id": "evaluate_value",
+        "label": "Valutare se vale la pena registrarsi/tornare",
+        "prompt": "Stai decidendo se questo sito merita il tuo tempo, se ci torneresti o ti registreresti."
     },
     {
         "id": "compare",
         "label": "Confrontare con alternative",
-        "prompt": "Stai valutando questo posto rispetto ad altri che conosci."
+        "prompt": "Stai valutando questo sito rispetto ad altri che usi di solito per contenuti simili."
     }
 ]
 
