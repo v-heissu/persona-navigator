@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse, urlunparse
 
 from personas import Persona, get_navigation_prompt, get_objective_prompt
-from claude_client import ClaudeClient
+from ai_client import AIClient
 from browser import BrowserManager
 from page_detector import detect_page_type
 
@@ -65,13 +65,13 @@ class AutonomousNavigator:
         persona: Persona,
         objective_id: str,
         max_steps: int = 5,
-        claude_client: Optional[ClaudeClient] = None,
+        claude_client: Optional[AIClient] = None,
         browser: Optional[BrowserManager] = None
     ):
         self.persona = persona
         self.objective_prompt = get_objective_prompt(objective_id)
         self.state = NavigationState(max_steps=max_steps)
-        self.claude_client = claude_client or ClaudeClient()
+        self.claude_client = claude_client or AIClient()
         self.browser = browser or BrowserManager()
         self.is_paused = False
         self.is_stopped = False
@@ -192,7 +192,7 @@ async def execute_navigation_command(
     command: str,
     current_url: str,
     page_type: str,
-    claude_client: ClaudeClient
+    claude_client: AIClient
 ) -> Dict[str, Any]:
     """Esegue un comando di navigazione in modalita' guidata (async)."""
     action_info = await claude_client.translate_command_to_action(
