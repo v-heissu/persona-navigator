@@ -83,6 +83,36 @@ class AIClient:
 
         return response.text
 
+    async def chat_multi_image(
+        self,
+        system_prompt: str,
+        user_message: str,
+        images_base64: List[str],
+        conversation_history: Optional[List[Dict[str, Any]]] = None
+    ) -> str:
+        """Chat con Gemini inviando più immagini in un singolo messaggio."""
+        contents = self._build_history(conversation_history)
+
+        parts = []
+        for i, img_b64 in enumerate(images_base64):
+            image_bytes = base64.b64decode(img_b64)
+            parts.append(types.Part.from_bytes(data=image_bytes, mime_type="image/png"))
+            parts.append(types.Part.from_text(text=f"[Sezione {i + 1} di {len(images_base64)}]"))
+        parts.append(types.Part.from_text(text=user_message))
+
+        contents.append(types.Content(role="user", parts=parts))
+
+        response = await self.client.aio.models.generate_content(
+            model=VISION_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=2048
+            )
+        )
+
+        return response.text
+
     async def classify_input(self, user_input: str) -> tuple:
         """Classifica l'input dell'utente come comando o domanda."""
         prompt = f"""L'utente ha scritto: "{user_input}"
