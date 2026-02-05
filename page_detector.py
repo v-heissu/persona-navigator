@@ -1,7 +1,7 @@
 """Rilevamento tipo pagina tramite Claude Vision (async)."""
 
 from typing import Optional
-from claude_client import ClaudeClient
+from ai_client import AIClient
 
 
 # Tipi di pagina supportati
@@ -32,11 +32,11 @@ Una sola parola."""
 
 async def detect_page_type(
     screenshot_base64: str,
-    claude_client: Optional[ClaudeClient] = None
+    claude_client: Optional[AIClient] = None
 ) -> str:
     """Rileva il tipo di pagina dallo screenshot."""
     if not claude_client:
-        claude_client = ClaudeClient()
+        claude_client = AIClient()
 
     response = await claude_client.analyze_image(
         image_base64=screenshot_base64,

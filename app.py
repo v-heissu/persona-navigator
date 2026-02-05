@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from personas import get_all_personas, get_persona, get_system_prompt, OBJECTIVES
 from suggestions import get_suggestions
 from browser import BrowserManager
-from claude_client import ClaudeClient
+from ai_client import AIClient
 from page_detector import detect_page_type, get_page_label
 from navigator import (
     NavigationState, AutonomousNavigator,
@@ -80,7 +80,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     session_id = id(websocket)
     browser: Optional[BrowserManager] = None
-    claude: Optional[ClaudeClient] = None
+    claude: Optional[AIClient] = None
     nav_state: Optional[NavigationState] = None
     history = []
     conversation_messages = []
@@ -93,7 +93,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({"event": event, **data})
 
     try:
-        claude = ClaudeClient()
+        claude = AIClient()
 
         while True:
             raw = await websocket.receive_text()
