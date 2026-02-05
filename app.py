@@ -1,19 +1,25 @@
-"""Personas Navigator - FastAPI Backend (fully async)."""
+"""Hybrid UX Inspector - FastAPI Backend (fully async)."""
 
+import io
 import json
+import base64
 import asyncio
 import logging
 import traceback
 from typing import Optional
 from contextlib import asynccontextmanager
 
+from PIL import Image, ImageDraw
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from personas import get_all_personas, get_persona, get_system_prompt, get_insights_prompt, OBJECTIVES
+from personas import (
+    get_all_personas, get_persona, get_system_prompt,
+    get_insights_prompt, customize_persona, OBJECTIVES
+)
 from suggestions import get_suggestions
-from browser import BrowserManager
+from browser import BrowserManager, DESKTOP_VIEWPORT, MOBILE_VIEWPORT
 from ai_client import AIClient
 from page_detector import detect_page_type, get_page_label
 from navigator import (
@@ -29,6 +35,20 @@ logger = logging.getLogger(__name__)
 browser_sessions = {}
 
 
+def create_highlight_overlay(screenshot_b64: str, x1: int, y1: int, x2: int, y2: int) -> str:
+    """Disegna un rettangolo rosso sullo screenshot per evidenziare un'area."""
+    img_bytes = base64.b64decode(screenshot_b64)
+    img = Image.open(io.BytesIO(img_bytes))
+    draw = ImageDraw.Draw(img, 'RGBA')
+
+    # Disegna area semitrasparente + bordo rosso
+    draw.rectangle([x1, y1, x2, y2], fill=(252, 80, 80, 40), outline=(252, 80, 80, 200), width=3)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """App lifespan: cleanup browsers on shutdown."""
@@ -41,7 +61,7 @@ async def lifespan(app: FastAPI):
     browser_sessions.clear()
 
 
-app = FastAPI(title="Personas Navigator", lifespan=lifespan)
+app = FastAPI(title="Hybrid UX Inspector", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -56,7 +76,14 @@ async def get_personas():
     """Restituisce le personas disponibili."""
     personas = get_all_personas()
     return [
-        {"id": p.id, "name": p.name, "description": p.short_description}
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.short_description,
+            "icon": p.icon,
+            "color": p.color,
+            "full_profile": p.full_profile
+        }
         for p in personas
     ]
 
@@ -89,9 +116,17 @@ async def websocket_endpoint(websocket: WebSocket):
     current_screenshot = ""
     persona_id = "marco"
     site_context = ""
+    custom_persona = None  # Persona personalizzata per questa sessione
+    current_viewport = "desktop"
 
     async def send(event: str, data: dict):
         await websocket.send_json({"event": event, **data})
+
+    def get_active_persona():
+        """Restituisce la persona attiva (custom o default)."""
+        if custom_persona:
+            return custom_persona
+        return get_persona(persona_id)
 
     try:
         claude = AIClient()
@@ -105,20 +140,26 @@ async def websocket_endpoint(websocket: WebSocket):
             if action == "start":
                 persona_id = msg.get("persona_id", "marco")
                 url = msg.get("url", "")
-                mode = msg.get("mode", "guided")
+                mode = msg.get("mode", "hybrid")
                 max_steps = msg.get("max_steps", 5)
                 site_context = msg.get("site_context", "")
+                current_viewport = msg.get("viewport", "desktop")
+
+                # Supporto persona personalizzata
+                custom_profile = msg.get("custom_profile", "")
+                if custom_profile:
+                    base_persona = get_persona(persona_id)
+                    custom_persona = customize_persona(base_persona, custom_profile=custom_profile)
 
                 if not url:
                     await send("error", {"message": "URL mancante"})
                     continue
 
                 await send("status", {"message": "Avvio browser..."})
-                logger.info("Starting browser for session %s", session_id)
+                logger.info("Starting browser for session %s (viewport: %s)", session_id, current_viewport)
 
-                # Avvia browser (async nativo, nessun run_in_executor)
                 browser = BrowserManager()
-                await browser.start()
+                await browser.start(viewport=current_viewport)
                 logger.info("Browser started, navigating to %s", url)
 
                 screenshot, final_url = await browser.navigate(url)
@@ -137,7 +178,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 nav_state.record_visit(final_url, page_type)
 
                 # Ottieni primo commento
-                persona = get_persona(persona_id)
+                persona = get_active_persona()
                 system_prompt = get_system_prompt(persona, site_context=site_context)
 
                 comment = await claude.chat(
@@ -145,9 +186,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     user_message=f"Guarda questo screenshot della pagina web. Questa e' la {get_page_label(page_type)}. Qual e' la tua prima impressione? (2-3 frasi)",
                     image_base64=screenshot
                 )
-                logger.info("Got first comment from Claude")
+                logger.info("Got first comment")
 
-                # Registra nella cronologia
                 history.append(format_history_entry(
                     entry_type="navigation",
                     timestamp=get_current_timestamp(),
@@ -166,6 +206,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
 
                 suggestions = get_suggestions(page_type)
+                vp = browser.get_viewport_size()
 
                 await send("navigation", {
                     "screenshot": screenshot,
@@ -177,7 +218,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     "suggestions": suggestions,
                     "step": nav_state.current_step,
                     "max_steps": nav_state.max_steps,
-                    "history": history
+                    "history": history,
+                    "viewport": current_viewport,
+                    "vp_width": vp["width"],
+                    "vp_height": vp["height"]
                 })
 
                 # Se autonoma, avvia navigazione autonoma
@@ -188,7 +232,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         objective_id, nav_state, history,
                         conversation_messages, current_url,
                         current_page_type, current_screenshot,
-                        max_steps, send, site_context
+                        max_steps, send, site_context,
+                        get_active_persona
                     )
 
             # === INPUT: Comando o domanda ===
@@ -197,7 +242,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if not user_input or not browser or not claude:
                     continue
 
-                persona = get_persona(persona_id)
+                persona = get_active_persona()
                 system_prompt = get_system_prompt(persona, site_context=site_context)
 
                 await send("status", {"message": "Analizzo..."})
@@ -306,8 +351,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 current_page_type = new_page_type
                 current_screenshot = screenshot
 
-                # Commento persona
-                persona = get_persona(persona_id)
+                persona = get_active_persona()
                 system_prompt = get_system_prompt(persona, site_context=site_context)
 
                 comment = await claude.chat(
@@ -361,6 +405,122 @@ async def websocket_endpoint(websocket: WebSocket):
                     "url": new_url
                 })
 
+            # === HIGHLIGHT: Area evidenziata dall'utente ===
+            elif action == "highlight":
+                if not browser or not claude:
+                    continue
+
+                x1 = msg.get("x1", 0)
+                y1 = msg.get("y1", 0)
+                x2 = msg.get("x2", 0)
+                y2 = msg.get("y2", 0)
+                question = msg.get("question", "")
+
+                await send("status", {"message": "Analizzo area evidenziata..."})
+
+                persona = get_active_persona()
+                system_prompt = get_system_prompt(persona, site_context=site_context)
+
+                # Crea screenshot con overlay evidenziazione
+                highlighted_screenshot = create_highlight_overlay(
+                    current_screenshot, int(x1), int(y1), int(x2), int(y2)
+                )
+
+                prompt = "L'utente ha evidenziato un'area specifica dello screenshot (contornata in rosso). "
+                if question:
+                    prompt += question
+                else:
+                    prompt += "Cosa ne pensi di questa area? Reagisci come faresti tu."
+
+                history.append(format_history_entry(
+                    entry_type="question",
+                    timestamp=get_current_timestamp(),
+                    content=f"[Area evidenziata] {question or 'Cosa ne pensi di quest area?'}"
+                ))
+
+                answer = await claude.chat(
+                    system_prompt=system_prompt,
+                    user_message=prompt,
+                    conversation_history=conversation_messages,
+                    image_base64=highlighted_screenshot
+                )
+
+                history.append(format_history_entry(
+                    entry_type="answer",
+                    timestamp=get_current_timestamp(),
+                    content=answer
+                ))
+                conversation_messages.append({
+                    "role": "user",
+                    "content": f"[Highlight area] {question or 'Cosa pensi di quest area?'}"
+                })
+                conversation_messages.append({
+                    "role": "assistant", "content": answer
+                })
+
+                await send("answer", {
+                    "question": f"[Area evidenziata] {question or 'Cosa ne pensi?'}",
+                    "answer": answer,
+                    "persona_name": persona.name.split(" - ")[0],
+                    "history": history
+                })
+
+            # === SET_VIEWPORT: Cambia viewport desktop/mobile ===
+            elif action == "set_viewport":
+                if not browser:
+                    continue
+
+                new_viewport = msg.get("viewport", "desktop")
+                if new_viewport == current_viewport:
+                    continue
+
+                await send("status", {"message": f"Cambio a vista {'mobile' if new_viewport == 'mobile' else 'desktop'}..."})
+
+                screenshot, new_url = await browser.set_viewport(new_viewport)
+                current_viewport = new_viewport
+                current_url = new_url
+                current_screenshot = screenshot
+
+                new_page_type = await detect_page_type(screenshot, claude)
+                current_page_type = new_page_type
+
+                persona = get_active_persona()
+                system_prompt = get_system_prompt(persona, site_context=site_context)
+
+                vp_label = "mobile" if new_viewport == "mobile" else "desktop"
+                comment = await claude.chat(
+                    system_prompt=system_prompt,
+                    user_message=f"Stai guardando la versione {vp_label} di questa pagina ({get_page_label(new_page_type)}). Cosa noti di diverso? Come ti sembra? (2-3 frasi)",
+                    conversation_history=conversation_messages,
+                    image_base64=screenshot
+                )
+
+                history.append(format_history_entry(
+                    entry_type="comment",
+                    timestamp=get_current_timestamp(),
+                    content=f"[Vista {vp_label}] {comment}"
+                ))
+                conversation_messages.append({
+                    "role": "assistant",
+                    "content": comment
+                })
+
+                vp = browser.get_viewport_size()
+
+                await send("navigation", {
+                    "screenshot": screenshot,
+                    "url": new_url,
+                    "page_type": new_page_type,
+                    "page_label": get_page_label(new_page_type),
+                    "comment": comment,
+                    "persona_name": persona.name.split(" - ")[0],
+                    "suggestions": get_suggestions(new_page_type),
+                    "history": history,
+                    "viewport": current_viewport,
+                    "vp_width": vp["width"],
+                    "vp_height": vp["height"]
+                })
+
             # === INSIGHTS: Genera report miglioramenti ===
             elif action == "insights":
                 if not claude or not conversation_messages:
@@ -369,9 +529,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 await send("status", {"message": "Genero insights..."})
 
-                persona = get_persona(persona_id)
+                persona = get_active_persona()
 
-                # Build conversation summary from history
                 summary_parts = []
                 for entry in history:
                     etype = entry.get("type", "")
@@ -406,7 +565,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 md = export_session(
                     url=current_url,
                     persona_id=persona_id,
-                    mode=msg.get("mode", "guided"),
+                    mode=msg.get("mode", "hybrid"),
                     objective=msg.get("objective", ""),
                     history=history
                 )
@@ -437,12 +596,12 @@ async def run_autonomous(
     websocket, browser, claude, persona_id, objective_id,
     nav_state, history, conversation_messages,
     current_url, current_page_type, current_screenshot,
-    max_steps, send, site_context=""
+    max_steps, send, site_context="", get_persona_fn=None
 ):
     """Esegue la navigazione autonoma."""
     from personas import get_navigation_prompt, get_objective_prompt
 
-    persona = get_persona(persona_id)
+    persona = get_persona_fn() if get_persona_fn else get_persona(persona_id)
     objective_prompt = get_objective_prompt(objective_id)
 
     for step in range(max_steps - 1):
@@ -455,7 +614,6 @@ async def run_autonomous(
                 return
             if msg.get("action") == "pause_autonomous":
                 await send("status", {"message": "In pausa..."})
-                # Wait for resume
                 while True:
                     raw = await websocket.receive_text()
                     msg = json.loads(raw)
@@ -465,7 +623,6 @@ async def run_autonomous(
                         await send("autonomous_done", {"reason": "stopped", "history": history})
                         return
                     if msg.get("action") == "input":
-                        # Handle question during pause
                         user_input = msg.get("text", "").strip()
                         if user_input:
                             system_prompt = get_system_prompt(persona, site_context=site_context)
@@ -499,7 +656,6 @@ async def run_autonomous(
 
         await send("status", {"message": f"Step {nav_state.current_step + 1}/{max_steps}..."})
 
-        # Get persona action
         prompt = get_navigation_prompt(
             persona=persona,
             objective=objective_prompt,
@@ -522,7 +678,6 @@ async def run_autonomous(
         comment = result.get("comment", "")
         reasoning = result.get("reasoning", "")
 
-        # Execute action
         if action == "DONE":
             history.append(format_history_entry(
                 entry_type="comment", timestamp=get_current_timestamp(), content=comment
@@ -545,7 +700,6 @@ async def run_autonomous(
             await send("autonomous_done", {"reason": "done", "history": history})
             return
 
-        # Execute browser action
         if action == "CLICK" and target:
             success, new_screenshot, new_url = await browser.click_element(target)
             if success:
@@ -604,7 +758,6 @@ async def run_autonomous(
             "history": history
         })
 
-        # Pausa tra step
         await asyncio.sleep(3)
 
     await send("autonomous_done", {"reason": "max_steps", "history": history})

@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Personas Navigator</title>
+<title>Hybrid UX Inspector</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -22,18 +23,19 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .app{display:flex;flex-direction:column;height:100vh}
 header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--bg3);background:var(--bg2);flex-shrink:0}
 header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8px}
+header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .header-right{display:flex;align-items:center;gap:16px}
 .header-status{font-size:.75rem;color:var(--text3);display:flex;align-items:center;gap:6px}
 .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
 .status-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green)}
 .status-dot.loading{background:var(--orange);animation:pulse 1s infinite}
-.header-actions button{padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .2s}
+.header-actions button{padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .2s;font-family:inherit}
 .header-actions button:hover{border-color:var(--text3);color:var(--text)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* Setup screen */
-.setup-screen{display:flex;align-items:center;justify-content:center;flex:1;padding:24px}
-.setup-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:40px;max-width:480px;width:100%}
+.setup-screen{display:flex;align-items:center;justify-content:center;flex:1;padding:24px;overflow-y:auto}
+.setup-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:40px;max-width:520px;width:100%}
 .setup-card h2{font-size:1.4rem;margin-bottom:6px}
 .setup-card p{color:var(--text2);margin-bottom:28px;line-height:1.5;font-size:.9rem}
 .field{margin-bottom:18px}
@@ -44,9 +46,35 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .field select:focus,.field input:focus{border-color:var(--accent)}
 .field select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239d9db5' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
 .field-desc{font-size:.75rem;color:var(--text3);margin-top:4px}
+.field textarea{
+  width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--bg4);border-radius:var(--radius-sm);
+  color:var(--text);font-size:.85rem;outline:none;transition:border .2s;font-family:inherit;resize:vertical;line-height:1.5}
+.field textarea:focus{border-color:var(--accent)}
+
+/* Persona selector row */
+.persona-row{display:flex;gap:8px;align-items:center}
+.persona-row select{flex:1}
+.btn-edit-persona{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.8rem;cursor:pointer;transition:all .2s;font-family:inherit;white-space:nowrap}
+.btn-edit-persona:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Persona preview */
+.persona-preview{display:flex;align-items:center;gap:10px;margin-top:8px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--bg4)}
+.persona-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.persona-preview-info{flex:1;min-width:0}
+.persona-preview-name{font-weight:600;font-size:.85rem}
+.persona-preview-desc{font-size:.72rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Viewport toggle */
+.viewport-toggle{display:flex;gap:8px}
+.viewport-btn{flex:1;padding:10px;border:1px solid var(--bg4);border-radius:var(--radius-sm);background:var(--bg);color:var(--text2);font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s;text-align:center;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+.viewport-btn.active{border-color:var(--accent);color:var(--text);background:var(--accent-glow)}
+.viewport-btn svg{width:16px;height:16px;fill:currentColor}
+
+/* Mode toggle */
 .mode-toggle{display:flex;gap:8px;margin-bottom:18px}
 .mode-btn{flex:1;padding:10px;border:1px solid var(--bg4);border-radius:var(--radius-sm);background:var(--bg);color:var(--text2);font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s;text-align:center;font-family:inherit}
 .mode-btn.active{border-color:var(--accent);color:var(--text);background:var(--accent-glow)}
+.mode-hint{font-size:.72rem;color:var(--text3);margin-top:4px;text-align:center}
 .autonomous-opts{display:none;background:var(--bg);border-radius:var(--radius-sm);padding:14px;margin-bottom:18px;border:1px solid var(--bg4)}
 .autonomous-opts.visible{display:block}
 .btn-primary{width:100%;padding:12px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-size:.95rem;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit}
@@ -63,11 +91,34 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .browser-topbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--bg3);flex-shrink:0}
 .browser-url{flex:1;font-size:.75rem;color:var(--text3);padding:6px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--bg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .browser-badge{font-size:.7rem;font-weight:600;color:var(--accent);padding:4px 10px;background:var(--accent-glow);border-radius:12px;white-space:nowrap}
+.browser-tools{display:flex;gap:4px;margin-left:4px}
+.browser-tools button{padding:5px 10px;border-radius:6px;border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.7rem;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:4px}
+.browser-tools button:hover{border-color:var(--text3);color:var(--text)}
+.browser-tools button.active{border-color:var(--accent);color:var(--accent);background:var(--accent-glow)}
+.browser-tools button svg{width:14px;height:14px;fill:currentColor}
+.viewport-indicator{font-size:.65rem;color:var(--text3);padding:3px 8px;border-radius:4px;background:var(--bg3);white-space:nowrap}
+
 .browser-viewport{flex:1;overflow:hidden;display:flex;align-items:flex-start;justify-content:center;padding:0;background:#111;position:relative}
 .browser-viewport img{width:100%;display:block;max-height:100%;object-fit:contain;cursor:pointer}
+.browser-viewport.highlight-mode img{cursor:crosshair}
 .click-ripple{position:absolute;width:20px;height:20px;border-radius:50%;background:rgba(124,92,252,.5);border:2px solid var(--accent);transform:translate(-50%,-50%);pointer-events:none;animation:ripple .6s ease-out forwards}
 @keyframes ripple{0%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
 .browser-viewport .empty-state{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.9rem}
+
+/* Highlight canvas overlay */
+.highlight-canvas{position:absolute;top:0;left:0;pointer-events:none}
+.highlight-canvas.active{pointer-events:auto;cursor:crosshair}
+
+/* Highlight prompt bar */
+.highlight-bar{display:none;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--radius);padding:10px 14px;z-index:10;display:none;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:90%}
+.highlight-bar.visible{display:flex}
+.highlight-bar input{flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--bg4);border-radius:6px;color:var(--text);font-size:.8rem;outline:none;font-family:inherit;min-width:200px}
+.highlight-bar input:focus{border-color:var(--accent)}
+.highlight-bar button{padding:7px 14px;border-radius:6px;border:none;font-size:.78rem;cursor:pointer;font-family:inherit;font-weight:500}
+.highlight-bar .btn-send{background:var(--accent);color:#fff}
+.highlight-bar .btn-send:hover{background:var(--accent2)}
+.highlight-bar .btn-cancel{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
+
 .browser-footer{display:flex;align-items:center;gap:8px;padding:6px 16px;background:var(--bg2);border-top:1px solid var(--bg3);flex-shrink:0}
 .step-text{font-size:.7rem;color:var(--text3)}
 .step-bar{flex:1;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
@@ -81,7 +132,7 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .chat-panel{width:400px;display:flex;flex-direction:column;background:var(--bg2);flex-shrink:0}
 @media(max-width:900px){.chat-panel{width:100%;position:fixed;inset:0;z-index:50;display:none}.chat-panel.mobile-open{display:flex}}
 .chat-header{padding:12px 20px;border-bottom:1px solid var(--bg3);display:flex;align-items:center;gap:10px;flex-shrink:0}
-.chat-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:1rem;flex-shrink:0}
+.chat-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:1.1rem;flex-shrink:0}
 .chat-persona-info{flex:1;min-width:0}
 .chat-persona-name{font-weight:600;font-size:.9rem}
 .chat-persona-desc{font-size:.7rem;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -99,8 +150,10 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .msg-persona .msg-bubble{background:var(--bg3);border-bottom-left-radius:4px;color:var(--text)}
 .msg-user .msg-bubble{background:var(--accent);border-bottom-right-radius:4px;color:#fff}
 .msg-system .msg-bubble{background:transparent;border:1px solid var(--bg4);color:var(--text3);font-size:.75rem;padding:6px 12px;border-radius:20px}
-.msg-name{font-size:.7rem;font-weight:600;color:var(--text3);margin-bottom:3px;padding-left:2px}
+.msg-name{font-size:.7rem;font-weight:600;color:var(--text3);margin-bottom:3px;padding-left:2px;display:flex;align-items:center;gap:4px}
+.msg-name .msg-icon{font-size:.8rem}
 .msg-nav-info{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--blue);margin-bottom:2px;padding-left:2px}
+.msg-highlight{color:var(--orange)}
 
 /* Chat input */
 .chat-input-area{padding:12px 16px;border-top:1px solid var(--bg3);flex-shrink:0}
@@ -126,12 +179,6 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .toast.visible{transform:translateY(0);opacity:1}
 .toast.error{border-color:var(--red);color:var(--red)}
 
-/* Textarea */
-.field textarea{
-  width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--bg4);border-radius:var(--radius-sm);
-  color:var(--text);font-size:.85rem;outline:none;transition:border .2s;font-family:inherit;resize:vertical;line-height:1.5}
-.field textarea:focus{border-color:var(--accent)}
-
 /* Insights panel */
 .insights-overlay{display:none;position:fixed;inset:0;background:rgba(15,15,19,.9);backdrop-filter:blur(6px);z-index:150;align-items:center;justify-content:center;padding:24px}
 .insights-overlay.visible{display:flex}
@@ -152,12 +199,32 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 .btn-insights{padding:6px 14px;border-radius:var(--radius-sm);border:1px solid var(--accent);background:var(--accent-glow);color:var(--accent2);font-size:.75rem;cursor:pointer;transition:all .2s;font-family:inherit;font-weight:500}
 .btn-insights:hover{background:var(--accent);color:#fff}
 .btn-insights:disabled{opacity:.4;cursor:not-allowed}
+
+/* Persona editor modal */
+.editor-overlay{display:none;position:fixed;inset:0;background:rgba(15,15,19,.9);backdrop-filter:blur(6px);z-index:150;align-items:center;justify-content:center;padding:24px}
+.editor-overlay.visible{display:flex}
+.editor-panel{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column}
+.editor-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--bg3);flex-shrink:0}
+.editor-header h3{font-size:1.1rem;font-weight:600}
+.editor-body{flex:1;overflow-y:auto;padding:24px}
+.editor-body .field{margin-bottom:16px}
+.editor-body textarea{min-height:240px}
+.editor-footer{padding:16px 24px;border-top:1px solid var(--bg3);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+.editor-footer button{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;cursor:pointer;font-family:inherit;font-weight:500;transition:all .2s}
+.btn-editor-save{background:var(--accent);color:#fff;border:none}
+.btn-editor-save:hover{background:var(--accent2)}
+.btn-editor-reset{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
+.btn-editor-reset:hover{border-color:var(--text3)}
+.btn-editor-cancel{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Personas Navigator</h1>
+    <h1>
+      <img src="/static/favicon.svg" alt="" class="logo-icon">
+      Hybrid UX Inspector
+    </h1>
     <div class="header-right">
       <div class="header-actions" id="headerActions" style="display:none">
         <button class="btn-insights" onclick="generateInsights()" id="insightsBtn">Genera Insights</button>
@@ -174,29 +241,58 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
   <!-- Setup Screen -->
   <div class="setup-screen" id="setup">
     <div class="setup-card">
-      <h2>Nuova sessione</h2>
-      <p>Simula la navigazione di un sito web attraverso gli occhi di una persona reale.</p>
+      <h2>Nuova ispezione</h2>
+      <p>Tu navighi il sito, la persona reagisce e risponde. Evidenzia aree, fai domande, ottieni feedback autentico.</p>
+
       <div class="field">
         <label>Persona</label>
-        <select id="personaSelect"></select>
-        <div class="field-desc" id="personaDesc"></div>
+        <div class="persona-row">
+          <select id="personaSelect"></select>
+          <button class="btn-edit-persona" onclick="openPersonaEditor()">Personalizza</button>
+        </div>
+        <div class="persona-preview" id="personaPreview">
+          <div class="persona-icon" id="personaPreviewIcon"></div>
+          <div class="persona-preview-info">
+            <div class="persona-preview-name" id="personaPreviewName"></div>
+            <div class="persona-preview-desc" id="personaPreviewDesc"></div>
+          </div>
+        </div>
       </div>
+
       <div class="field">
         <label>URL del sito</label>
         <input type="text" id="urlInput" placeholder="https://esempio.com">
       </div>
+
       <div class="field">
         <label>Contesto del sito (opzionale)</label>
-        <textarea id="siteContext" rows="4" placeholder="Descrivi brevemente il sito: cos'e', cosa offre, a chi si rivolge... Aiuta la persona a capire il contesto."></textarea>
-        <div class="field-desc">Migliora la qualita' dei commenti dando contesto alla persona (es. "Sito editoriale di food, non e-commerce")</div>
+        <textarea id="siteContext" rows="3" placeholder="Descrivi brevemente il sito: cos'e', cosa offre, a chi si rivolge..."></textarea>
+        <div class="field-desc">Migliora la qualita' dei commenti dando contesto alla persona</div>
       </div>
+
       <div class="field">
-        <label>Modalita</label>
-        <div class="mode-toggle">
-          <button class="mode-btn active" data-mode="guided" onclick="setMode('guided')">Guidata</button>
-          <button class="mode-btn" data-mode="autonomous" onclick="setMode('autonomous')">Autonoma</button>
+        <label>Viewport</label>
+        <div class="viewport-toggle">
+          <button class="viewport-btn active" data-vp="desktop" onclick="setViewport('desktop')">
+            <svg viewBox="0 0 24 24"><path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/></svg>
+            Desktop
+          </button>
+          <button class="viewport-btn" data-vp="mobile" onclick="setViewport('mobile')">
+            <svg viewBox="0 0 24 24"><path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm-2 20h-4v-1h4v1zm3.25-3H6.75V4h10.5v14z"/></svg>
+            Mobile
+          </button>
         </div>
       </div>
+
+      <div class="field">
+        <label>Modalita'</label>
+        <div class="mode-toggle">
+          <button class="mode-btn active" data-mode="hybrid" onclick="setMode('hybrid')">Ibrida</button>
+          <button class="mode-btn" data-mode="autonomous" onclick="setMode('autonomous')">Autonoma</button>
+        </div>
+        <div class="mode-hint" id="modeHint">Tu navighi, la persona reagisce e risponde alle tue domande</div>
+      </div>
+
       <div class="autonomous-opts" id="autonomousOpts">
         <div class="field">
           <label>Obiettivo</label>
@@ -207,7 +303,8 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
           <input type="number" id="maxSteps" value="5" min="3" max="10">
         </div>
       </div>
-      <button class="btn-primary" id="startBtn" onclick="startSession()">Avvia navigazione</button>
+
+      <button class="btn-primary" id="startBtn" onclick="startSession()">Avvia ispezione</button>
     </div>
   </div>
 
@@ -219,9 +316,29 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
         <div class="browser-topbar" id="browserTopbar" style="display:none">
           <div class="browser-url" id="urlBar"></div>
           <div class="browser-badge" id="pageBadge"></div>
+          <div class="viewport-indicator" id="vpIndicator">Desktop 1280x800</div>
+          <div class="browser-tools">
+            <button id="vpToggleBtn" onclick="toggleViewport()" title="Cambia viewport">
+              <svg viewBox="0 0 24 24" id="vpToggleIcon"><path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm-2 20h-4v-1h4v1zm3.25-3H6.75V4h10.5v14z"/></svg>
+              <span id="vpToggleLabel">Mobile</span>
+            </button>
+            <button id="highlightBtn" onclick="toggleHighlight()" title="Evidenzia area">
+              <svg viewBox="0 0 24 24"><path d="M3 3h18v2H3V3zm0 16h18v2H3v-2zm0-8h18v2H3v-2zm0 4h12v2H3v-2zm0-8h12v2H3V7z"/><rect x="14" y="7" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1"/></svg>
+              Evidenzia
+            </button>
+          </div>
         </div>
         <div class="browser-viewport" id="browserViewport">
           <div class="empty-state">In attesa di navigazione...</div>
+          <canvas class="highlight-canvas" id="highlightCanvas"></canvas>
+        </div>
+        <!-- Highlight prompt bar -->
+        <div class="highlight-bar" id="highlightBar">
+          <span style="font-size:.8rem;color:var(--orange);font-weight:500">Area selezionata</span>
+          <input type="text" id="highlightQuestion" placeholder="Domanda opzionale per la persona..."
+                 onkeydown="if(event.key==='Enter')sendHighlight()">
+          <button class="btn-send" onclick="sendHighlight()">Chiedi</button>
+          <button class="btn-cancel" onclick="cancelHighlight()">Annulla</button>
         </div>
         <div class="browser-footer" id="browserFooter" style="display:none">
           <span class="step-text" id="stepText"></span>
@@ -256,6 +373,37 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
   </div>
 </div>
 
+<!-- Persona Editor Modal -->
+<div class="editor-overlay" id="editorOverlay" onclick="if(event.target===this)closePersonaEditor()">
+  <div class="editor-panel">
+    <div class="editor-header">
+      <h3>Personalizza Persona</h3>
+      <button class="insights-close" onclick="closePersonaEditor()">&times;</button>
+    </div>
+    <div class="editor-body">
+      <div class="field">
+        <label>Nome persona</label>
+        <input type="text" id="editorName" readonly style="opacity:.6;cursor:not-allowed">
+      </div>
+      <div class="field">
+        <label>Descrizione breve</label>
+        <input type="text" id="editorDesc">
+      </div>
+      <div class="field">
+        <label>Profilo completo (prompt)</label>
+        <textarea id="editorProfile" rows="12" placeholder="Definisci il profilo completo della persona: demografia, profilo psicografico, pain points, comportamento digitale, tono di voce..."></textarea>
+        <div class="field-desc">Questo testo definisce come la persona si comporta, reagisce e risponde. Piu' dettagliato = piu' realistico.</div>
+      </div>
+    </div>
+    <div class="editor-footer">
+      <button class="btn-editor-reset" onclick="resetPersonaEdit()">Ripristina originale</button>
+      <button class="btn-editor-cancel" onclick="closePersonaEditor()">Annulla</button>
+      <button class="btn-editor-save" onclick="savePersonaEdit()">Salva modifiche</button>
+    </div>
+  </div>
+</div>
+
+<!-- Insights Modal -->
 <div class="insights-overlay" id="insightsOverlay" onclick="if(event.target===this)closeInsights()">
   <div class="insights-panel">
     <div class="insights-header">
@@ -279,12 +427,25 @@ header h1{font-size:1.1rem;font-weight:700;display:flex;align-items:center;gap:8
 
 <script>
 let ws = null;
-let currentMode = 'guided';
+let currentMode = 'hybrid';
+let currentViewport = 'desktop';
 let isAutonomousRunning = false;
 let isPaused = false;
 let personasList = [];
 let objectivesList = [];
 let selectedPersonaId = 'marco';
+
+// Viewport sizes
+let vpWidth = 1280;
+let vpHeight = 800;
+
+// Highlight state
+let isHighlightMode = false;
+let highlightStart = null;
+let highlightCoords = null; // {x1, y1, x2, y2} in viewport space
+
+// Persona customizations (session-only)
+let customizedProfiles = {}; // personaId -> custom full_profile
 
 // === Init ===
 document.addEventListener('DOMContentLoaded', async () => {
@@ -297,14 +458,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sel = document.getElementById('personaSelect');
   personasList.forEach(p => {
     const opt = document.createElement('option');
-    opt.value = p.id; opt.textContent = p.name;
+    opt.value = p.id;
+    opt.textContent = `${p.icon} ${p.name}`;
     sel.appendChild(opt);
   });
   sel.addEventListener('change', () => {
-    const p = personasList.find(x => x.id === sel.value);
-    document.getElementById('personaDesc').textContent = p ? p.description : '';
+    updatePersonaPreview();
   });
-  sel.dispatchEvent(new Event('change'));
+  updatePersonaPreview();
 
   const oSel = document.getElementById('objectiveSelect');
   objectivesList.forEach(o => {
@@ -315,6 +476,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   connectWebSocket();
 });
+
+function updatePersonaPreview() {
+  const sel = document.getElementById('personaSelect');
+  const p = personasList.find(x => x.id === sel.value);
+  if (!p) return;
+  selectedPersonaId = p.id;
+  const icon = document.getElementById('personaPreviewIcon');
+  icon.textContent = p.icon || p.name.charAt(0);
+  icon.style.background = p.color || 'var(--accent)';
+  document.getElementById('personaPreviewName').textContent = p.name;
+  const isCustom = customizedProfiles[p.id];
+  document.getElementById('personaPreviewDesc').textContent =
+    isCustom ? '(personalizzata) ' + p.description : p.description;
+}
 
 // === WebSocket ===
 function connectWebSocket() {
@@ -347,6 +522,13 @@ function handleEvent(data) {
   else if (ev === 'navigation') {
     hideLoading();
     showSession();
+    // Update viewport info if provided
+    if (data.vp_width) vpWidth = data.vp_width;
+    if (data.vp_height) vpHeight = data.vp_height;
+    if (data.viewport) {
+      currentViewport = data.viewport;
+      updateViewportUI();
+    }
     updateBrowser(data);
     addChatNav(data.page_label, data.url);
     addChatMessage(data.persona_name, data.comment);
@@ -406,6 +588,18 @@ function setMode(mode) {
   document.querySelectorAll('.mode-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.mode === mode));
   document.getElementById('autonomousOpts').classList.toggle('visible', mode === 'autonomous');
+  const hint = document.getElementById('modeHint');
+  if (mode === 'hybrid') {
+    hint.textContent = 'Tu navighi, la persona reagisce e risponde alle tue domande';
+  } else {
+    hint.textContent = 'La persona naviga autonomamente e commenta quello che vede';
+  }
+}
+
+function setViewport(vp) {
+  currentViewport = vp;
+  document.querySelectorAll('.viewport-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.vp === vp));
 }
 
 function startSession() {
@@ -413,15 +607,18 @@ function startSession() {
   if (!url) { showToast('Inserisci un URL', true); return; }
 
   selectedPersonaId = document.getElementById('personaSelect').value;
+  const customProfile = customizedProfiles[selectedPersonaId] || '';
 
   sendWS({
     action: 'start',
     persona_id: selectedPersonaId,
     url: url,
     mode: currentMode,
+    viewport: currentViewport,
     max_steps: parseInt(document.getElementById('maxSteps').value) || 5,
     objective: document.getElementById('objectiveSelect').value,
-    site_context: document.getElementById('siteContext').value.trim()
+    site_context: document.getElementById('siteContext').value.trim(),
+    custom_profile: customProfile
   });
 
   showLoading('Avvio browser...');
@@ -437,12 +634,12 @@ function showSession() {
   document.getElementById('session').classList.add('active');
   document.getElementById('headerActions').style.display = '';
 
-  // Set persona info in chat header
   const p = personasList.find(x => x.id === selectedPersonaId);
   if (p) {
-    const name = p.name.split(' - ')[0];
-    document.getElementById('chatAvatar').textContent = name.charAt(0);
-    document.getElementById('chatPersonaName').textContent = name;
+    const avatar = document.getElementById('chatAvatar');
+    avatar.textContent = p.icon || p.name.charAt(0);
+    avatar.style.background = p.color || 'var(--accent)';
+    document.getElementById('chatPersonaName').textContent = p.name;
     document.getElementById('chatPersonaDesc').textContent = p.description || '';
   }
 
@@ -452,23 +649,37 @@ function showSession() {
   }
 }
 
-// Viewport dimensions (must match browser.py context)
-const VP_WIDTH = 1280;
-const VP_HEIGHT = 800;
+function updateViewportUI() {
+  const indicator = document.getElementById('vpIndicator');
+  const toggleLabel = document.getElementById('vpToggleLabel');
+  if (currentViewport === 'mobile') {
+    indicator.textContent = 'Mobile 390x844';
+    toggleLabel.textContent = 'Desktop';
+  } else {
+    indicator.textContent = 'Desktop 1280x800';
+    toggleLabel.textContent = 'Mobile';
+  }
+}
 
 function updateBrowser(data) {
-  // Show topbar
   const topbar = document.getElementById('browserTopbar');
   topbar.style.display = '';
   document.getElementById('urlBar').textContent = data.url || '';
   document.getElementById('pageBadge').textContent = data.page_label || '';
 
-  // Show screenshot
   const viewport = document.getElementById('browserViewport');
-  viewport.innerHTML = `<img src="data:image/png;base64,${data.screenshot}" alt="Screenshot" id="screenshotImg">`;
+  // Keep canvas, replace everything else
+  const canvas = document.getElementById('highlightCanvas');
+  viewport.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = 'data:image/png;base64,' + data.screenshot;
+  img.alt = 'Screenshot';
+  img.id = 'screenshotImg';
+  viewport.appendChild(img);
+  viewport.appendChild(canvas);
   bindScreenshotEvents();
+  resizeHighlightCanvas();
 
-  // Show footer
   document.getElementById('browserFooter').style.display = '';
 }
 
@@ -482,16 +693,14 @@ function bindScreenshotEvents() {
   const img = document.getElementById('screenshotImg');
   if (!img) return;
 
-  // Click handler
   img.addEventListener('click', (e) => {
-    if (isAutonomousRunning) return;
+    if (isAutonomousRunning || isHighlightMode) return;
     const rect = img.getBoundingClientRect();
     const relX = (e.clientX - rect.left) / rect.width;
     const relY = (e.clientY - rect.top) / rect.height;
-    const vpX = Math.round(relX * VP_WIDTH);
-    const vpY = Math.round(relY * VP_HEIGHT);
+    const vpX = Math.round(relX * vpWidth);
+    const vpY = Math.round(relY * vpHeight);
 
-    // Visual feedback
     const viewport = document.getElementById('browserViewport');
     const ripple = document.createElement('div');
     ripple.className = 'click-ripple';
@@ -504,7 +713,6 @@ function bindScreenshotEvents() {
     sendWS({ action: 'click', x: vpX, y: vpY });
   });
 
-  // Scroll handler
   img.addEventListener('wheel', (e) => {
     if (isAutonomousRunning) return;
     e.preventDefault();
@@ -525,12 +733,152 @@ function updateSuggestions(suggestions) {
   ).join('');
 }
 
+// === Highlight tool ===
+function toggleHighlight() {
+  isHighlightMode = !isHighlightMode;
+  const btn = document.getElementById('highlightBtn');
+  const viewport = document.getElementById('browserViewport');
+  const canvas = document.getElementById('highlightCanvas');
+
+  btn.classList.toggle('active', isHighlightMode);
+  viewport.classList.toggle('highlight-mode', isHighlightMode);
+  canvas.classList.toggle('active', isHighlightMode);
+
+  if (!isHighlightMode) {
+    cancelHighlight();
+  }
+}
+
+function resizeHighlightCanvas() {
+  const img = document.getElementById('screenshotImg');
+  const canvas = document.getElementById('highlightCanvas');
+  if (!img || !canvas) return;
+
+  // Wait for image to load for correct dimensions
+  const doResize = () => {
+    const rect = img.getBoundingClientRect();
+    const vpRect = document.getElementById('browserViewport').getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    canvas.style.left = (rect.left - vpRect.left) + 'px';
+    canvas.style.top = (rect.top - vpRect.top) + 'px';
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+  };
+
+  if (img.complete) doResize();
+  else img.addEventListener('load', doResize);
+}
+
+// Canvas drawing events
+document.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById('highlightCanvas');
+  if (!canvas) return;
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!isHighlightMode) return;
+    const rect = canvas.getBoundingClientRect();
+    highlightStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isHighlightMode || !highlightStart) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Draw selection rectangle
+    const sx = highlightStart.x, sy = highlightStart.y;
+    ctx.fillStyle = 'rgba(252, 80, 80, 0.15)';
+    ctx.fillRect(sx, sy, x - sx, y - sy);
+    ctx.strokeStyle = 'rgba(252, 80, 80, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(sx, sy, x - sx, y - sy);
+    ctx.setLineDash([]);
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (!isHighlightMode || !highlightStart) return;
+    const rect = canvas.getBoundingClientRect();
+    const endX = e.clientX - rect.left;
+    const endY = e.clientY - rect.top;
+
+    // Minimum size check
+    if (Math.abs(endX - highlightStart.x) < 10 || Math.abs(endY - highlightStart.y) < 10) {
+      highlightStart = null;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    // Convert to viewport coordinates
+    const scaleX = vpWidth / canvas.width;
+    const scaleY = vpHeight / canvas.height;
+
+    highlightCoords = {
+      x1: Math.round(Math.min(highlightStart.x, endX) * scaleX),
+      y1: Math.round(Math.min(highlightStart.y, endY) * scaleY),
+      x2: Math.round(Math.max(highlightStart.x, endX) * scaleX),
+      y2: Math.round(Math.max(highlightStart.y, endY) * scaleY)
+    };
+
+    highlightStart = null;
+
+    // Show question prompt
+    document.getElementById('highlightBar').classList.add('visible');
+    document.getElementById('highlightQuestion').focus();
+  });
+
+  // Resize canvas when window resizes
+  window.addEventListener('resize', resizeHighlightCanvas);
+});
+
+function sendHighlight() {
+  if (!highlightCoords) return;
+
+  const question = document.getElementById('highlightQuestion').value.trim();
+  sendWS({
+    action: 'highlight',
+    x1: highlightCoords.x1,
+    y1: highlightCoords.y1,
+    x2: highlightCoords.x2,
+    y2: highlightCoords.y2,
+    question: question
+  });
+
+  showLoading('Analizzo area...');
+  cancelHighlight();
+}
+
+function cancelHighlight() {
+  highlightCoords = null;
+  highlightStart = null;
+  document.getElementById('highlightBar').classList.remove('visible');
+  document.getElementById('highlightQuestion').value = '';
+  const canvas = document.getElementById('highlightCanvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+// === Viewport toggle (in session) ===
+function toggleViewport() {
+  const newVp = currentViewport === 'desktop' ? 'mobile' : 'desktop';
+  showLoading(`Cambio a vista ${newVp}...`);
+  sendWS({ action: 'set_viewport', viewport: newVp });
+}
+
 // === Chat messages ===
 function addChatMessage(name, text) {
   if (!text) return;
+  const p = personasList.find(x => x.name.startsWith(name));
+  const icon = p ? p.icon : '';
   const el = document.createElement('div');
   el.className = 'msg msg-persona';
-  el.innerHTML = `<div class="msg-name">${esc(name || 'Persona')}</div><div class="msg-bubble">${esc(text)}</div>`;
+  el.innerHTML = `<div class="msg-name"><span class="msg-icon">${icon}</span> ${esc(name || 'Persona')}</div><div class="msg-bubble">${esc(text)}</div>`;
   appendChat(el);
 }
 
@@ -538,7 +886,8 @@ function addChatUser(text) {
   if (!text) return;
   const el = document.createElement('div');
   el.className = 'msg msg-user';
-  el.innerHTML = `<div class="msg-bubble">${esc(text)}</div>`;
+  const isHighlight = text.startsWith('[Area evidenziata]');
+  el.innerHTML = `<div class="msg-bubble${isHighlight ? ' msg-highlight' : ''}">${esc(text)}</div>`;
   appendChat(el);
 }
 
@@ -613,6 +962,45 @@ function stopAutonomous() {
   sendWS({ action: 'stop_autonomous' });
 }
 
+// === Persona Editor ===
+function openPersonaEditor() {
+  const pid = document.getElementById('personaSelect').value;
+  const p = personasList.find(x => x.id === pid);
+  if (!p) return;
+
+  document.getElementById('editorName').value = p.name;
+  document.getElementById('editorDesc').value = p.description;
+  // Use custom profile if exists, otherwise default
+  document.getElementById('editorProfile').value = customizedProfiles[pid] || p.full_profile;
+  document.getElementById('editorOverlay').classList.add('visible');
+}
+
+function closePersonaEditor() {
+  document.getElementById('editorOverlay').classList.remove('visible');
+}
+
+function savePersonaEdit() {
+  const pid = document.getElementById('personaSelect').value;
+  const newProfile = document.getElementById('editorProfile').value.trim();
+  if (newProfile) {
+    customizedProfiles[pid] = newProfile;
+  }
+  closePersonaEditor();
+  updatePersonaPreview();
+  showToast('Persona personalizzata salvata');
+}
+
+function resetPersonaEdit() {
+  const pid = document.getElementById('personaSelect').value;
+  const p = personasList.find(x => x.id === pid);
+  if (!p) return;
+  delete customizedProfiles[pid];
+  document.getElementById('editorProfile').value = p.full_profile;
+  document.getElementById('editorDesc').value = p.description;
+  updatePersonaPreview();
+  showToast('Profilo ripristinato');
+}
+
 // === Export / New ===
 function exportSession() {
   sendWS({ action: 'export', mode: currentMode, objective: document.getElementById('objectiveSelect').value });
@@ -622,7 +1010,7 @@ function downloadMarkdown(md) {
   const blob = new Blob([md], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `sessione_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.md`;
+  a.download = `ispezione_${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
   showToast('Export scaricato');
@@ -636,7 +1024,6 @@ function newSession() {
 function generateInsights() {
   const btn = document.getElementById('insightsBtn');
   btn.disabled = true;
-  // Show overlay with loading state
   document.getElementById('insightsBody').innerHTML = '<div class="insights-loading"><div class="spinner"></div><span>Generazione insights in corso...</span></div>';
   document.getElementById('insightsOverlay').classList.add('visible');
   sendWS({ action: 'insights' });
@@ -654,18 +1041,12 @@ function closeInsights() {
 }
 
 function renderMarkdown(md) {
-  // Simple markdown renderer for insights
   let html = esc(md);
-  // Headers
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  // Bold
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  // Lists
   html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-  // Paragraphs (lines not already wrapped)
   html = html.replace(/^(?!<[hul]|<li)(.+)$/gm, '<p>$1</p>');
-  // Clean up empty paragraphs
   html = html.replace(/<p>\s*<\/p>/g, '');
   return html;
 }
