@@ -185,11 +185,9 @@ class BrowserManager:
         return screenshot_b64, self._page.url
 
     async def click_at(self, x: int, y: int) -> Tuple[str, str]:
-        """Clicca alle coordinate (x, y) del viewport."""
+        """Clicca alle coordinate (x, y) del viewport usando click JS nativo."""
         if not self._page:
             return "", ""
-
-        old_url = self._page.url
 
         # Listen for popup pages (target="_blank" links)
         new_page = None
@@ -200,11 +198,34 @@ class BrowserManager:
 
         self._context.on("page", on_page)
 
-        # Click at coordinates
-        await self._page.mouse.click(x, y)
-        await self._page.wait_for_timeout(400)
+        # Use JS to dispatch real pointer/mouse events on the exact DOM element
+        # This is more reliable than Playwright's mouse.click for interactive
+        # elements (popups, buttons, links with JS handlers, etc.)
+        await self._page.evaluate('''(coords) => {
+            const el = document.elementFromPoint(coords.x, coords.y);
+            if (!el) return;
 
-        # If a popup opened, switch to it
+            const evtInit = {
+                bubbles: true, cancelable: true, view: window,
+                clientX: coords.x, clientY: coords.y
+            };
+            el.dispatchEvent(new PointerEvent('pointerdown', evtInit));
+            el.dispatchEvent(new MouseEvent('mousedown', evtInit));
+            el.dispatchEvent(new PointerEvent('pointerup', evtInit));
+            el.dispatchEvent(new MouseEvent('mouseup', evtInit));
+            el.dispatchEvent(new MouseEvent('click', evtInit));
+
+            // Also trigger .click() on the nearest interactive ancestor
+            const target = el.closest(
+                'a[href], button, [onclick], [role="button"], ' +
+                'input, select, summary, label, [tabindex]'
+            );
+            if (target && target !== el) target.click();
+        }''', {'x': x, 'y': y})
+
+        await self._page.wait_for_timeout(300)
+
+        # Handle popup (target="_blank")
         if new_page:
             try:
                 await new_page.wait_for_load_state(
@@ -214,25 +235,10 @@ class BrowserManager:
                 pass
             self._page = new_page
         else:
-            # If mouse.click didn't navigate, try JS click as fallback
-            if self._page.url == old_url:
-                try:
-                    await self._page.evaluate('''(coords) => {
-                        const el = document.elementFromPoint(coords.x, coords.y);
-                        if (el) {
-                            const link = el.closest('a');
-                            if (link) { link.click(); return; }
-                            el.click();
-                        }
-                    }''', {'x': x, 'y': y})
-                    await self._page.wait_for_timeout(300)
-                except Exception:
-                    pass
-
-            # Wait for any navigation to settle
+            # Wait briefly for any navigation triggered by the click
             try:
                 await self._page.wait_for_load_state(
-                    'domcontentloaded', timeout=3000
+                    'domcontentloaded', timeout=2000
                 )
             except Exception:
                 pass
