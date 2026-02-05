@@ -1,4 +1,4 @@
-"""Rilevamento tipo pagina tramite Claude Vision."""
+"""Rilevamento tipo pagina tramite Claude Vision (async)."""
 
 from typing import Optional
 from claude_client import ClaudeClient
@@ -30,37 +30,25 @@ Rispondi SOLO con una di queste categorie:
 Una sola parola."""
 
 
-def detect_page_type(
+async def detect_page_type(
     screenshot_base64: str,
     claude_client: Optional[ClaudeClient] = None
 ) -> str:
-    """
-    Rileva il tipo di pagina dallo screenshot.
-
-    Args:
-        screenshot_base64: Screenshot in base64
-        claude_client: Client Claude (opzionale, ne crea uno se non fornito)
-
-    Returns:
-        Tipo di pagina (homepage, menu, booking, about, gallery, contact, other)
-    """
+    """Rileva il tipo di pagina dallo screenshot."""
     if not claude_client:
         claude_client = ClaudeClient()
 
-    response = claude_client.analyze_image(
+    response = await claude_client.analyze_image(
         image_base64=screenshot_base64,
         system_prompt="Sei un analizzatore di pagine web. Rispondi con una sola parola.",
         user_prompt=DETECTION_PROMPT
     )
 
-    # Normalizza la risposta
     page_type = response.strip().lower()
 
-    # Verifica che sia un tipo valido
     if page_type in PAGE_TYPES:
         return page_type
 
-    # Prova a estrarre un tipo valido dalla risposta
     for pt in PAGE_TYPES:
         if pt in page_type:
             return pt
@@ -69,15 +57,7 @@ def detect_page_type(
 
 
 def get_page_emoji(page_type: str) -> str:
-    """
-    Restituisce l'emoji per un tipo di pagina.
-
-    Args:
-        page_type: Tipo di pagina
-
-    Returns:
-        Emoji corrispondente
-    """
+    """Restituisce l'emoji per un tipo di pagina."""
     emojis = {
         "homepage": "home",
         "menu": "fork_and_knife",
@@ -91,15 +71,7 @@ def get_page_emoji(page_type: str) -> str:
 
 
 def get_page_label(page_type: str) -> str:
-    """
-    Restituisce l'etichetta italiana per un tipo di pagina.
-
-    Args:
-        page_type: Tipo di pagina
-
-    Returns:
-        Etichetta in italiano
-    """
+    """Restituisce l'etichetta italiana per un tipo di pagina."""
     labels = {
         "homepage": "Homepage",
         "menu": "Menu",
