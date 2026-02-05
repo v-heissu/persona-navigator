@@ -9,7 +9,7 @@ import traceback
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from PIL import Image, ImageDraw
+from PIL import Image
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -35,14 +35,21 @@ logger = logging.getLogger(__name__)
 browser_sessions = {}
 
 
-def create_highlight_overlay(screenshot_b64: str, x1: int, y1: int, x2: int, y2: int) -> str:
-    """Disegna un rettangolo rosso sullo screenshot per evidenziare un'area."""
+def crop_highlight_area(screenshot_b64: str, x1: int, y1: int, x2: int, y2: int) -> str:
+    """Ritaglia l'area evidenziata dallo screenshot originale."""
     img_bytes = base64.b64decode(screenshot_b64)
     img = Image.open(io.BytesIO(img_bytes))
-    draw = ImageDraw.Draw(img, 'RGBA')
-    draw.rectangle([x1, y1, x2, y2], fill=(252, 80, 80, 40), outline=(252, 80, 80, 200), width=3)
+    # Clamp coordinates to image bounds
+    x1c = max(0, min(int(x1), img.width))
+    y1c = max(0, min(int(y1), img.height))
+    x2c = max(0, min(int(x2), img.width))
+    y2c = max(0, min(int(y2), img.height))
+    if x2c <= x1c or y2c <= y1c:
+        # Fallback: return original if crop area is invalid
+        return screenshot_b64
+    cropped = img.crop((x1c, y1c, x2c, y2c))
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
+    cropped.save(buffer, format='PNG')
     return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 
@@ -252,30 +259,35 @@ async def websocket_endpoint(websocket: WebSocket):
                         "history": history
                     })
 
-            # === CLICK: silent navigation, no comment ===
+            # === CLICK: silent navigation, no comment, fast ===
             elif action == "click":
                 if not browser:
                     continue
 
                 x, y = msg.get("x", 0), msg.get("y", 0)
                 screenshot, new_url = await browser.click_at(int(x), int(y))
-                new_page_type = await detect_page_type(screenshot, claude)
 
-                current_url = new_url
-                current_page_type = new_page_type
                 current_screenshot = screenshot
+                # Detect page type only if URL actually changed
+                if new_url != current_url:
+                    current_url = new_url
+                    # Fire-and-forget page type detection to avoid blocking
+                    try:
+                        current_page_type = await detect_page_type(screenshot, claude)
+                    except Exception:
+                        pass
 
                 history.append(format_history_entry(
                     entry_type="navigation", timestamp=get_current_timestamp(),
-                    page_type=new_page_type, url=new_url, screenshot_b64=screenshot
+                    page_type=current_page_type, url=current_url, screenshot_b64=screenshot
                 ))
 
                 await send("navigation", {
-                    "screenshot": screenshot, "url": new_url,
-                    "page_type": new_page_type,
-                    "page_label": get_page_label(new_page_type),
+                    "screenshot": screenshot, "url": current_url,
+                    "page_type": current_page_type,
+                    "page_label": get_page_label(current_page_type),
                     "comment": "", "persona_name": "",
-                    "suggestions": get_suggestions(new_page_type),
+                    "suggestions": get_suggestions(current_page_type),
                     "history": history
                 })
 
@@ -366,11 +378,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 persona = get_active_persona()
                 system_prompt = get_system_prompt(persona, site_context=site_context)
 
-                highlighted_screenshot = create_highlight_overlay(
+                cropped_screenshot = crop_highlight_area(
                     current_screenshot, int(x1), int(y1), int(x2), int(y2)
                 )
 
-                prompt = "L'utente ha evidenziato un'area specifica dello screenshot (contornata in rosso). "
+                prompt = "Ecco un ritaglio di un'area specifica della pagina web che l'utente vuole farti analizzare. "
                 prompt += question if question else "Cosa ne pensi di questa area? Reagisci come faresti tu."
 
                 q_text = question or "Cosa ne pensi di quest'area?"
@@ -382,7 +394,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 answer = await claude.chat(
                     system_prompt=system_prompt, user_message=prompt,
                     conversation_history=conversation_messages,
-                    image_base64=highlighted_screenshot
+                    image_base64=cropped_screenshot
                 )
 
                 history.append(format_history_entry(

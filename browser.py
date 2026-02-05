@@ -106,14 +106,14 @@ class BrowserManager:
             url = 'https://' + url
 
         try:
-            await self._page.goto(url, wait_until='networkidle', timeout=30000)
+            await self._page.goto(url, wait_until='domcontentloaded', timeout=15000)
         except Exception:
             try:
-                await self._page.goto(url, wait_until='domcontentloaded', timeout=30000)
+                await self._page.goto(url, wait_until='commit', timeout=15000)
             except Exception:
                 pass
 
-        await self._page.wait_for_timeout(1000)
+        await self._page.wait_for_timeout(500)
         await self._try_dismiss_cookies()
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
@@ -138,7 +138,7 @@ class BrowserManager:
             if element:
                 await element.click()
                 try:
-                    await self._page.wait_for_load_state('networkidle', timeout=10000)
+                    await self._page.wait_for_load_state('domcontentloaded', timeout=5000)
                 except Exception:
                     pass
             else:
@@ -146,11 +146,11 @@ class BrowserManager:
 
         except Exception:
             try:
-                await self._page.wait_for_load_state('domcontentloaded', timeout=5000)
+                await self._page.wait_for_load_state('domcontentloaded', timeout=3000)
             except Exception:
                 pass
 
-        await self._page.wait_for_timeout(1000)
+        await self._page.wait_for_timeout(500)
         await self._try_dismiss_cookies()
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
@@ -164,7 +164,7 @@ class BrowserManager:
             return "", ""
 
         await self._page.evaluate('window.scrollBy(0, window.innerHeight * 0.8)')
-        await self._page.wait_for_timeout(500)
+        await self._page.wait_for_timeout(300)
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
@@ -177,7 +177,7 @@ class BrowserManager:
             return "", ""
 
         await self._page.evaluate('window.scrollBy(0, -window.innerHeight * 0.8)')
-        await self._page.wait_for_timeout(500)
+        await self._page.wait_for_timeout(300)
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
@@ -189,14 +189,55 @@ class BrowserManager:
         if not self._page:
             return "", ""
 
-        await self._page.mouse.click(x, y)
-        try:
-            await self._page.wait_for_load_state('networkidle', timeout=10000)
-        except Exception:
-            pass
+        old_url = self._page.url
 
-        await self._page.wait_for_timeout(1000)
-        await self._try_dismiss_cookies()
+        # Listen for popup pages (target="_blank" links)
+        new_page = None
+
+        def on_page(page):
+            nonlocal new_page
+            new_page = page
+
+        self._context.on("page", on_page)
+
+        # Click at coordinates
+        await self._page.mouse.click(x, y)
+        await self._page.wait_for_timeout(400)
+
+        # If a popup opened, switch to it
+        if new_page:
+            try:
+                await new_page.wait_for_load_state(
+                    'domcontentloaded', timeout=5000
+                )
+            except Exception:
+                pass
+            self._page = new_page
+        else:
+            # If mouse.click didn't navigate, try JS click as fallback
+            if self._page.url == old_url:
+                try:
+                    await self._page.evaluate('''(coords) => {
+                        const el = document.elementFromPoint(coords.x, coords.y);
+                        if (el) {
+                            const link = el.closest('a');
+                            if (link) { link.click(); return; }
+                            el.click();
+                        }
+                    }''', {'x': x, 'y': y})
+                    await self._page.wait_for_timeout(300)
+                except Exception:
+                    pass
+
+            # Wait for any navigation to settle
+            try:
+                await self._page.wait_for_load_state(
+                    'domcontentloaded', timeout=3000
+                )
+            except Exception:
+                pass
+
+        self._context.remove_listener("page", on_page)
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
@@ -209,7 +250,7 @@ class BrowserManager:
             return "", ""
 
         await self._page.evaluate(f'window.scrollBy(0, {delta_y})')
-        await self._page.wait_for_timeout(500)
+        await self._page.wait_for_timeout(300)
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
@@ -260,13 +301,13 @@ class BrowserManager:
         # Ri-naviga all'URL corrente
         if current_url and current_url != "about:blank":
             try:
-                await self._page.goto(current_url, wait_until='networkidle', timeout=30000)
+                await self._page.goto(current_url, wait_until='domcontentloaded', timeout=15000)
             except Exception:
                 try:
-                    await self._page.goto(current_url, wait_until='domcontentloaded', timeout=30000)
+                    await self._page.goto(current_url, wait_until='commit', timeout=15000)
                 except Exception:
                     pass
-            await self._page.wait_for_timeout(1000)
+            await self._page.wait_for_timeout(500)
             await self._try_dismiss_cookies()
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
@@ -295,7 +336,7 @@ class BrowserManager:
 
     async def _try_dismiss_cookies(self) -> bool:
         """Tenta di chiudere cookie banner. Best effort."""
-        await self._page.wait_for_timeout(1000)
+        await self._page.wait_for_timeout(500)
 
         for selector in COOKIE_SELECTORS:
             try:
@@ -304,7 +345,7 @@ class BrowserManager:
                     is_visible = await element.is_visible()
                     if is_visible:
                         await element.click()
-                        await self._page.wait_for_timeout(500)
+                        await self._page.wait_for_timeout(300)
                         return True
             except Exception:
                 continue
