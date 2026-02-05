@@ -66,13 +66,15 @@ class AutonomousNavigator:
         objective_id: str,
         max_steps: int = 5,
         claude_client: Optional[AIClient] = None,
-        browser: Optional[BrowserManager] = None
+        browser: Optional[BrowserManager] = None,
+        site_context: str = ""
     ):
         self.persona = persona
         self.objective_prompt = get_objective_prompt(objective_id)
         self.state = NavigationState(max_steps=max_steps)
         self.claude_client = claude_client or AIClient()
         self.browser = browser or BrowserManager()
+        self.site_context = site_context
         self.is_paused = False
         self.is_stopped = False
 
@@ -175,7 +177,8 @@ class AutonomousNavigator:
             current_url=current_url,
             visited_pages=self.state.visited_pages,
             current_step=self.state.current_step,
-            max_steps=self.state.max_steps
+            max_steps=self.state.max_steps,
+            site_context=self.site_context
         )
 
         response = await self.claude_client.analyze_image(

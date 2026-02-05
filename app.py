@@ -11,7 +11,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from personas import get_all_personas, get_persona, get_system_prompt, OBJECTIVES
+from personas import get_all_personas, get_persona, get_system_prompt, get_insights_prompt, OBJECTIVES
 from suggestions import get_suggestions
 from browser import BrowserManager
 from ai_client import AIClient
@@ -88,6 +88,7 @@ async def websocket_endpoint(websocket: WebSocket):
     current_page_type = "other"
     current_screenshot = ""
     persona_id = "marco"
+    site_context = ""
 
     async def send(event: str, data: dict):
         await websocket.send_json({"event": event, **data})
@@ -106,6 +107,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 url = msg.get("url", "")
                 mode = msg.get("mode", "guided")
                 max_steps = msg.get("max_steps", 5)
+                site_context = msg.get("site_context", "")
 
                 if not url:
                     await send("error", {"message": "URL mancante"})
@@ -136,7 +138,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Ottieni primo commento
                 persona = get_persona(persona_id)
-                system_prompt = get_system_prompt(persona)
+                system_prompt = get_system_prompt(persona, site_context=site_context)
 
                 comment = await claude.chat(
                     system_prompt=system_prompt,
@@ -180,13 +182,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Se autonoma, avvia navigazione autonoma
                 if mode == "autonomous":
-                    objective_id = msg.get("objective", "evaluate_booking")
+                    objective_id = msg.get("objective", "first_impression")
                     await run_autonomous(
                         websocket, browser, claude, persona_id,
                         objective_id, nav_state, history,
                         conversation_messages, current_url,
                         current_page_type, current_screenshot,
-                        max_steps, send
+                        max_steps, send, site_context
                     )
 
             # === INPUT: Comando o domanda ===
@@ -196,7 +198,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     continue
 
                 persona = get_persona(persona_id)
-                system_prompt = get_system_prompt(persona)
+                system_prompt = get_system_prompt(persona, site_context=site_context)
 
                 await send("status", {"message": "Analizzo..."})
 
@@ -306,7 +308,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Commento persona
                 persona = get_persona(persona_id)
-                system_prompt = get_system_prompt(persona)
+                system_prompt = get_system_prompt(persona, site_context=site_context)
 
                 comment = await claude.chat(
                     system_prompt=system_prompt,
@@ -359,6 +361,46 @@ async def websocket_endpoint(websocket: WebSocket):
                     "url": new_url
                 })
 
+            # === INSIGHTS: Genera report miglioramenti ===
+            elif action == "insights":
+                if not claude or not conversation_messages:
+                    await send("error", {"message": "Nessuna sessione attiva per generare insights"})
+                    continue
+
+                await send("status", {"message": "Genero insights..."})
+
+                persona = get_persona(persona_id)
+
+                # Build conversation summary from history
+                summary_parts = []
+                for entry in history:
+                    etype = entry.get("type", "")
+                    if etype == "navigation":
+                        summary_parts.append(f"[Navigazione] {entry.get('page_type', '')} - {entry.get('url', '')}")
+                    elif etype == "comment":
+                        summary_parts.append(f"[Commento persona] {entry.get('content', '')}")
+                    elif etype == "question":
+                        summary_parts.append(f"[Domanda operatore] {entry.get('content', '')}")
+                    elif etype == "answer":
+                        summary_parts.append(f"[Risposta persona] {entry.get('content', '')}")
+                    elif etype == "action":
+                        act = entry.get("action", {})
+                        summary_parts.append(f"[Azione] {act.get('type', '')} {act.get('target', '')} - {entry.get('reasoning', '')}")
+                conversation_summary = "\n".join(summary_parts)
+
+                insights_prompt = get_insights_prompt(
+                    persona=persona,
+                    site_context=site_context,
+                    conversation_summary=conversation_summary
+                )
+
+                insights = await claude.chat(
+                    system_prompt="Sei un UX researcher esperto. Rispondi in italiano.",
+                    user_message=insights_prompt
+                )
+
+                await send("insights", {"content": insights, "persona_name": persona.name})
+
             # === EXPORT ===
             elif action == "export":
                 md = export_session(
@@ -395,7 +437,7 @@ async def run_autonomous(
     websocket, browser, claude, persona_id, objective_id,
     nav_state, history, conversation_messages,
     current_url, current_page_type, current_screenshot,
-    max_steps, send
+    max_steps, send, site_context=""
 ):
     """Esegue la navigazione autonoma."""
     from personas import get_navigation_prompt, get_objective_prompt
@@ -426,7 +468,7 @@ async def run_autonomous(
                         # Handle question during pause
                         user_input = msg.get("text", "").strip()
                         if user_input:
-                            system_prompt = get_system_prompt(persona)
+                            system_prompt = get_system_prompt(persona, site_context=site_context)
                             history.append(format_history_entry(
                                 entry_type="question",
                                 timestamp=get_current_timestamp(),
@@ -465,7 +507,8 @@ async def run_autonomous(
             current_url=current_url,
             visited_pages=nav_state.visited_pages,
             current_step=nav_state.current_step,
-            max_steps=nav_state.max_steps
+            max_steps=nav_state.max_steps,
+            site_context=site_context
         )
         response = await claude.analyze_image(
             image_base64=current_screenshot,
