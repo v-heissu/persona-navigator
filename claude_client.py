@@ -1,4 +1,4 @@
-"""Anthropic API wrapper per vision e chat."""
+"""Anthropic API wrapper per vision e chat (async)."""
 
 import os
 import json
@@ -12,47 +12,28 @@ MODEL = "claude-sonnet-4-20250514"
 
 
 class ClaudeClient:
-    """Client per interagire con l'API Anthropic."""
+    """Client async per interagire con l'API Anthropic."""
 
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Inizializza il client.
-
-        Args:
-            api_key: API key Anthropic (default: da env ANTHROPIC_API_KEY)
-        """
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY non configurata")
 
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
 
-    def analyze_image(
+    async def analyze_image(
         self,
         image_base64: str,
         system_prompt: str,
         user_prompt: str,
         conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> str:
-        """
-        Analizza un'immagine con Claude Vision.
-
-        Args:
-            image_base64: Immagine in base64
-            system_prompt: Prompt di sistema
-            user_prompt: Prompt utente
-            conversation_history: Storico conversazione opzionale
-
-        Returns:
-            Risposta di Claude
-        """
+        """Analizza un'immagine con Claude Vision."""
         messages = []
 
-        # Aggiungi storico conversazione se presente
         if conversation_history:
             messages.extend(conversation_history)
 
-        # Aggiungi messaggio corrente con immagine
         messages.append({
             "role": "user",
             "content": [
@@ -71,7 +52,7 @@ class ClaudeClient:
             ]
         })
 
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=MODEL,
             max_tokens=1024,
             system=system_prompt,
@@ -80,32 +61,19 @@ class ClaudeClient:
 
         return response.content[0].text
 
-    def chat(
+    async def chat(
         self,
         system_prompt: str,
         user_message: str,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         image_base64: Optional[str] = None
     ) -> str:
-        """
-        Chat con Claude.
-
-        Args:
-            system_prompt: Prompt di sistema
-            user_message: Messaggio utente
-            conversation_history: Storico conversazione opzionale
-            image_base64: Immagine opzionale da includere
-
-        Returns:
-            Risposta di Claude
-        """
+        """Chat con Claude."""
         messages = []
 
-        # Aggiungi storico conversazione se presente
         if conversation_history:
             messages.extend(conversation_history)
 
-        # Costruisci contenuto messaggio
         if image_base64:
             content = [
                 {
@@ -129,7 +97,7 @@ class ClaudeClient:
             "content": content
         })
 
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=MODEL,
             max_tokens=1024,
             system=system_prompt,
@@ -138,16 +106,8 @@ class ClaudeClient:
 
         return response.content[0].text
 
-    def classify_input(self, user_input: str) -> tuple:
-        """
-        Classifica l'input dell'utente come comando o domanda.
-
-        Args:
-            user_input: Input dell'utente
-
-        Returns:
-            Tupla (tipo, contenuto) dove tipo e' "NAVIGATE" o "QUESTION"
-        """
+    async def classify_input(self, user_input: str) -> tuple:
+        """Classifica l'input dell'utente come comando o domanda."""
         prompt = f"""L'utente ha scritto: "{user_input}"
 
 Classifica:
@@ -156,7 +116,7 @@ Classifica:
 
 Rispondi SOLO nel formato indicato."""
 
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=MODEL,
             max_tokens=256,
             messages=[{"role": "user", "content": prompt}]
@@ -168,26 +128,15 @@ Rispondi SOLO nel formato indicato."""
             parts = result.split("|", 1)
             return parts[0].strip().upper(), parts[1].strip()
 
-        # Default a domanda se non classificabile
         return "QUESTION", user_input
 
-    def translate_command_to_action(
+    async def translate_command_to_action(
         self,
         command: str,
         current_url: str,
         page_type: str
     ) -> Dict[str, Any]:
-        """
-        Traduce un comando di navigazione in azione Playwright.
-
-        Args:
-            command: Comando dell'utente
-            current_url: URL corrente
-            page_type: Tipo di pagina corrente
-
-        Returns:
-            Dizionario con azione da eseguire
-        """
+        """Traduce un comando di navigazione in azione Playwright."""
         prompt = f"""Traduci questo comando di navigazione in azione Playwright.
 
 Comando: "{command}"
@@ -207,7 +156,7 @@ Selector comuni:
 - contatti -> a[href*="contact"], a[href*="contatti"]
 - chi siamo -> a[href*="about"], a[href*="chi-siamo"]"""
 
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=MODEL,
             max_tokens=256,
             messages=[{"role": "user", "content": prompt}]
@@ -215,37 +164,24 @@ Selector comuni:
 
         result = response.content[0].text.strip()
 
-        # Estrai JSON dalla risposta
         try:
-            # Cerca JSON nella risposta
             json_match = re.search(r'\{[^}]+\}', result, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
         except json.JSONDecodeError:
             pass
 
-        # Default: scroll down
         return {"action": "scroll_down"}
 
     def parse_navigation_response(self, response: str) -> Dict[str, Any]:
-        """
-        Parsa la risposta di navigazione autonoma.
-
-        Args:
-            response: Risposta di Claude
-
-        Returns:
-            Dizionario con comment, action, target, reasoning
-        """
+        """Parsa la risposta di navigazione autonoma."""
         try:
-            # Cerca JSON nella risposta
             json_match = re.search(r'\{[^}]*"comment"[^}]*\}', response, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
         except json.JSONDecodeError:
             pass
 
-        # Fallback: estrai informazioni dal testo
         return {
             "comment": response[:200] if len(response) > 200 else response,
             "action": "DONE",

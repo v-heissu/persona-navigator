@@ -1,7 +1,8 @@
-"""Personas Navigator - FastAPI Backend."""
+"""Personas Navigator - FastAPI Backend (fully async)."""
 
 import json
 import asyncio
+import logging
 import traceback
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -21,6 +22,8 @@ from navigator import (
 )
 from exporter import export_session, format_history_entry, get_current_timestamp
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Browser pool: one per WebSocket session
 browser_sessions = {}
@@ -32,7 +35,7 @@ async def lifespan(app: FastAPI):
     yield
     for sid, browser in browser_sessions.items():
         try:
-            browser.stop()
+            await browser.stop()
         except Exception:
             pass
     browser_sessions.clear()
@@ -109,20 +112,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     continue
 
                 await send("status", {"message": "Avvio browser..."})
+                logger.info("Starting browser for session %s", session_id)
 
-                # Crea browser in thread separato
-                def start_browser():
-                    nonlocal browser, current_url, current_page_type, current_screenshot
-                    browser = BrowserManager()
-                    browser.start()
-                    screenshot, final_url = browser.navigate(url)
-                    page_type = detect_page_type(screenshot, claude)
-                    return screenshot, final_url, page_type
+                # Avvia browser (async nativo, nessun run_in_executor)
+                browser = BrowserManager()
+                await browser.start()
+                logger.info("Browser started, navigating to %s", url)
 
-                loop = asyncio.get_event_loop()
-                screenshot, final_url, page_type = await loop.run_in_executor(
-                    None, start_browser
-                )
+                screenshot, final_url = await browser.navigate(url)
+                logger.info("Navigation complete, detecting page type...")
+
+                page_type = await detect_page_type(screenshot, claude)
+                logger.info("Page type: %s", page_type)
 
                 current_url = final_url
                 current_page_type = page_type
@@ -137,14 +138,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 persona = get_persona(persona_id)
                 system_prompt = get_system_prompt(persona)
 
-                def get_comment():
-                    return claude.chat(
-                        system_prompt=system_prompt,
-                        user_message=f"Guarda questo screenshot della pagina web. Questa e' la {get_page_label(page_type)}. Qual e' la tua prima impressione? (2-3 frasi)",
-                        image_base64=screenshot
-                    )
-
-                comment = await loop.run_in_executor(None, get_comment)
+                comment = await claude.chat(
+                    system_prompt=system_prompt,
+                    user_message=f"Guarda questo screenshot della pagina web. Questa e' la {get_page_label(page_type)}. Qual e' la tua prima impressione? (2-3 frasi)",
+                    image_base64=screenshot
+                )
+                logger.info("Got first comment from Claude")
 
                 # Registra nella cronologia
                 history.append(format_history_entry(
@@ -201,35 +200,26 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 await send("status", {"message": "Analizzo..."})
 
-                loop = asyncio.get_event_loop()
-
                 # Classifica input
-                def classify():
-                    return claude.classify_input(user_input)
-
-                input_type, content = await loop.run_in_executor(None, classify)
+                input_type, content = await claude.classify_input(user_input)
 
                 if input_type == "NAVIGATE":
                     await send("status", {"message": "Navigazione..."})
 
-                    def do_navigate():
-                        result = execute_navigation_command(
-                            browser=browser,
-                            command=content,
-                            current_url=current_url,
-                            page_type=current_page_type,
-                            claude_client=claude
-                        )
-                        comment = claude.chat(
-                            system_prompt=system_prompt,
-                            user_message=f"Sei appena arrivato su questa pagina ({get_page_label(result.get('page_type', 'other'))}). Cosa ne pensi? (2-3 frasi)",
-                            conversation_history=conversation_messages,
-                            image_base64=result.get("screenshot")
-                        )
-                        result["comment"] = comment
-                        return result
+                    result = await execute_navigation_command(
+                        browser=browser,
+                        command=content,
+                        current_url=current_url,
+                        page_type=current_page_type,
+                        claude_client=claude
+                    )
 
-                    result = await loop.run_in_executor(None, do_navigate)
+                    nav_comment = await claude.chat(
+                        system_prompt=system_prompt,
+                        user_message=f"Sei appena arrivato su questa pagina ({get_page_label(result.get('page_type', 'other'))}). Cosa ne pensi? (2-3 frasi)",
+                        conversation_history=conversation_messages,
+                        image_base64=result.get("screenshot")
+                    )
 
                     current_url = result.get("url", current_url)
                     current_page_type = result.get("page_type", "other")
@@ -245,11 +235,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     history.append(format_history_entry(
                         entry_type="comment",
                         timestamp=get_current_timestamp(),
-                        content=result.get("comment", "")
+                        content=nav_comment
                     ))
                     conversation_messages.append({
                         "role": "assistant",
-                        "content": result.get("comment", "")
+                        "content": nav_comment
                     })
 
                     suggestions = get_suggestions(current_page_type)
@@ -259,7 +249,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "url": current_url,
                         "page_type": current_page_type,
                         "page_label": get_page_label(current_page_type),
-                        "comment": result.get("comment", ""),
+                        "comment": nav_comment,
                         "persona_name": persona.name.split(" - ")[0],
                         "suggestions": suggestions,
                         "history": history
@@ -273,15 +263,12 @@ async def websocket_endpoint(websocket: WebSocket):
                         content=user_input
                     ))
 
-                    def answer_question():
-                        return claude.chat(
-                            system_prompt=system_prompt,
-                            user_message=user_input,
-                            conversation_history=conversation_messages,
-                            image_base64=current_screenshot
-                        )
-
-                    answer = await loop.run_in_executor(None, answer_question)
+                    answer = await claude.chat(
+                        system_prompt=system_prompt,
+                        user_message=user_input,
+                        conversation_history=conversation_messages,
+                        image_base64=current_screenshot
+                    )
 
                     history.append(format_history_entry(
                         entry_type="answer",
@@ -318,8 +305,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 pass  # Loop will be broken by flag
 
     except WebSocketDisconnect:
-        pass
+        logger.info("WebSocket disconnected for session %s", session_id)
     except Exception as e:
+        logger.error("Error in session %s: %s\n%s", session_id, e, traceback.format_exc())
         try:
             await send("error", {"message": str(e)})
         except Exception:
@@ -327,7 +315,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         if browser:
             try:
-                browser.stop()
+                await browser.stop()
             except Exception:
                 pass
         browser_sessions.pop(session_id, None)
@@ -344,7 +332,6 @@ async def run_autonomous(
 
     persona = get_persona(persona_id)
     objective_prompt = get_objective_prompt(objective_id)
-    loop = asyncio.get_event_loop()
 
     for step in range(max_steps - 1):
         # Check for stop message (non-blocking)
@@ -376,14 +363,12 @@ async def run_autonomous(
                                 content=user_input
                             ))
 
-                            def answer_q():
-                                return claude.chat(
-                                    system_prompt=system_prompt,
-                                    user_message=user_input,
-                                    conversation_history=conversation_messages,
-                                    image_base64=current_screenshot
-                                )
-                            answer = await loop.run_in_executor(None, answer_q)
+                            answer = await claude.chat(
+                                system_prompt=system_prompt,
+                                user_message=user_input,
+                                conversation_history=conversation_messages,
+                                image_base64=current_screenshot
+                            )
                             history.append(format_history_entry(
                                 entry_type="answer",
                                 timestamp=get_current_timestamp(),
@@ -403,24 +388,21 @@ async def run_autonomous(
         await send("status", {"message": f"Step {nav_state.current_step + 1}/{max_steps}..."})
 
         # Get persona action
-        def get_action():
-            prompt = get_navigation_prompt(
-                persona=persona,
-                objective=objective_prompt,
-                page_type=current_page_type,
-                current_url=current_url,
-                visited_pages=nav_state.visited_pages,
-                current_step=nav_state.current_step,
-                max_steps=nav_state.max_steps
-            )
-            response = claude.analyze_image(
-                image_base64=current_screenshot,
-                system_prompt=f"Sei {persona.name.split(' - ')[0]}. Rispondi solo in JSON.",
-                user_prompt=prompt
-            )
-            return claude.parse_navigation_response(response)
-
-        result = await loop.run_in_executor(None, get_action)
+        prompt = get_navigation_prompt(
+            persona=persona,
+            objective=objective_prompt,
+            page_type=current_page_type,
+            current_url=current_url,
+            visited_pages=nav_state.visited_pages,
+            current_step=nav_state.current_step,
+            max_steps=nav_state.max_steps
+        )
+        response = await claude.analyze_image(
+            image_base64=current_screenshot,
+            system_prompt=f"Sei {persona.name.split(' - ')[0]}. Rispondi solo in JSON.",
+            user_prompt=prompt
+        )
+        result = claude.parse_navigation_response(response)
 
         action = result.get("action", "DONE")
         target = result.get("target", "")
@@ -450,40 +432,33 @@ async def run_autonomous(
             await send("autonomous_done", {"reason": "done", "history": history})
             return
 
-        def execute_step():
-            nonlocal current_url, current_page_type, current_screenshot
+        # Execute browser action
+        if action == "CLICK" and target:
+            success, new_screenshot, new_url = await browser.click_element(target)
+            if success:
+                new_page_type = await detect_page_type(new_screenshot, claude)
+                nav_state.record_visit(new_url, new_page_type)
+                current_screenshot = new_screenshot
+                current_url = new_url
+                current_page_type = new_page_type
+            else:
+                s, u = await browser.scroll_down()
+                nav_state.record_scroll()
+                current_screenshot = s
+                current_url = u
 
-            if action == "CLICK" and target:
-                success, new_screenshot, new_url = browser.click_element(target)
-                if success:
-                    new_page_type = detect_page_type(new_screenshot, claude)
-                    nav_state.record_visit(new_url, new_page_type)
-                    return new_screenshot, new_url, new_page_type
-                else:
-                    screenshot, url = browser.scroll_down()
-                    nav_state.record_scroll()
-                    return screenshot, url, current_page_type
+        elif action == "SCROLL_DOWN":
+            if nav_state.can_scroll():
+                s, u = await browser.scroll_down()
+                nav_state.record_scroll()
+                current_screenshot = s
+                current_url = u
 
-            elif action == "SCROLL_DOWN":
-                if nav_state.can_scroll():
-                    screenshot, url = browser.scroll_down()
-                    nav_state.record_scroll()
-                    return screenshot, url, current_page_type
-                return current_screenshot, current_url, current_page_type
-
-            elif action == "BACK":
-                screenshot, url = browser.go_back()
-                page_type = detect_page_type(screenshot, claude)
-                return screenshot, url, page_type
-
-            return current_screenshot, current_url, current_page_type
-
-        new_screenshot, new_url, new_page_type = await loop.run_in_executor(
-            None, execute_step
-        )
-        current_screenshot = new_screenshot
-        current_url = new_url
-        current_page_type = new_page_type
+        elif action == "BACK":
+            s, u = await browser.go_back()
+            current_screenshot = s
+            current_url = u
+            current_page_type = await detect_page_type(current_screenshot, claude)
 
         history.append(format_history_entry(
             entry_type="navigation", timestamp=get_current_timestamp(),
