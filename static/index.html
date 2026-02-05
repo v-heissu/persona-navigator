@@ -89,7 +89,9 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 /* Left: Browser viewport */
 .browser-panel{flex:1;display:flex;flex-direction:column;background:var(--bg);border-right:1px solid var(--bg3);min-width:0}
 .browser-topbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--bg3);flex-shrink:0}
-.browser-url{flex:1;font-size:.75rem;color:var(--text3);padding:6px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--bg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.browser-url{flex:1;font-size:.75rem;color:var(--text);padding:6px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--bg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:none;font-family:inherit;transition:border .2s}
+.browser-url:focus{border-color:var(--accent)}
+.browser-url::placeholder{color:var(--text3)}
 .browser-badge{font-size:.7rem;font-weight:600;color:var(--accent);padding:4px 10px;background:var(--accent-glow);border-radius:12px;white-space:nowrap}
 .browser-tools{display:flex;gap:4px;margin-left:4px}
 .browser-tools button{padding:5px 10px;border-radius:6px;border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.7rem;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:4px}
@@ -103,6 +105,7 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .browser-viewport.highlight-mode img{cursor:crosshair}
 .click-ripple{position:absolute;width:20px;height:20px;border-radius:50%;background:rgba(124,92,252,.5);border:2px solid var(--accent);transform:translate(-50%,-50%);pointer-events:none;animation:ripple .6s ease-out forwards}
 @keyframes ripple{0%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
+.browser-viewport img.dimmed{opacity:.5;transition:opacity .2s}
 .browser-viewport .empty-state{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.9rem}
 
 /* Highlight canvas overlay */
@@ -314,13 +317,18 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
       <!-- Left: Browser -->
       <div class="browser-panel">
         <div class="browser-topbar" id="browserTopbar" style="display:none">
-          <div class="browser-url" id="urlBar"></div>
+          <input type="text" class="browser-url" id="urlBar" placeholder="Incolla URL e premi Invio..."
+                 onkeydown="if(event.key==='Enter')navigateToUrl()">
           <div class="browser-badge" id="pageBadge"></div>
           <div class="viewport-indicator" id="vpIndicator">Desktop 1280x800</div>
           <div class="browser-tools">
             <button id="vpToggleBtn" onclick="toggleViewport()" title="Cambia viewport">
               <svg viewBox="0 0 24 24" id="vpToggleIcon"><path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm-2 20h-4v-1h4v1zm3.25-3H6.75V4h10.5v14z"/></svg>
               <span id="vpToggleLabel">Mobile</span>
+            </button>
+            <button id="commentBtn" onclick="requestComment()" title="Chiedi commento alla persona">
+              <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+              Commenta
             </button>
             <button id="highlightBtn" onclick="toggleHighlight()" title="Evidenzia area">
               <svg viewBox="0 0 24 24"><path d="M3 3h18v2H3V3zm0 16h18v2H3v-2zm0-8h18v2H3v-2zm0 4h12v2H3v-2zm0-8h12v2H3V7z"/><rect x="14" y="7" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1"/></svg>
@@ -444,8 +452,33 @@ let isHighlightMode = false;
 let highlightStart = null;
 let highlightCoords = null; // {x1, y1, x2, y2} in viewport space
 
+// Track last nav URL to avoid duplicate system messages
+let lastNavUrl = '';
+
 // Persona customizations (session-only)
 let customizedProfiles = {}; // personaId -> custom full_profile
+
+// === Coordinate mapping for object-fit:contain ===
+function getImageRenderInfo(img) {
+  const rect = img.getBoundingClientRect();
+  const natW = img.naturalWidth || vpWidth;
+  const natH = img.naturalHeight || vpHeight;
+  const natAspect = natW / natH;
+  const boxAspect = rect.width / rect.height;
+  let renderW, renderH, offsetX, offsetY;
+  if (natAspect > boxAspect) {
+    renderW = rect.width;
+    renderH = rect.width / natAspect;
+    offsetX = 0;
+    offsetY = (rect.height - renderH) / 2;
+  } else {
+    renderH = rect.height;
+    renderW = rect.height * natAspect;
+    offsetX = (rect.width - renderW) / 2;
+    offsetY = 0;
+  }
+  return { renderW, renderH, offsetX, offsetY, rect };
+}
 
 // === Init ===
 document.addEventListener('DOMContentLoaded', async () => {
@@ -530,8 +563,15 @@ function handleEvent(data) {
       updateViewportUI();
     }
     updateBrowser(data);
-    addChatNav(data.page_label, data.url);
-    addChatMessage(data.persona_name, data.comment);
+    // Only show nav message if URL changed
+    if (data.url && data.url !== lastNavUrl) {
+      addChatNav(data.page_label, data.url);
+      lastNavUrl = data.url;
+    }
+    // Only show persona comment if there is one
+    if (data.comment) {
+      addChatMessage(data.persona_name, data.comment);
+    }
     updateSuggestions(data.suggestions || []);
     if (data.step && data.max_steps) updateProgress(data.step, data.max_steps);
   }
@@ -557,7 +597,18 @@ function handleEvent(data) {
 
   else if (ev === 'answer') {
     hideLoading();
-    addChatUser(data.question);
+    // User message already shown by sendInput(), don't duplicate
+    addChatMessage(data.persona_name, data.answer);
+  }
+
+  else if (ev === 'persona_comment') {
+    hideLoading();
+    addChatMessage(data.persona_name, data.comment);
+  }
+
+  else if (ev === 'highlight_answer') {
+    hideLoading();
+    addChatUser('[Area evidenziata] ' + (data.question || ''));
     addChatMessage(data.persona_name, data.answer);
   }
 
@@ -664,7 +715,7 @@ function updateViewportUI() {
 function updateBrowser(data) {
   const topbar = document.getElementById('browserTopbar');
   topbar.style.display = '';
-  document.getElementById('urlBar').textContent = data.url || '';
+  document.getElementById('urlBar').value = data.url || '';
   document.getElementById('pageBadge').textContent = data.page_label || '';
 
   const viewport = document.getElementById('browserViewport');
@@ -685,8 +736,11 @@ function updateBrowser(data) {
 
 function updateScreenshotOnly(data) {
   const img = document.getElementById('screenshotImg');
-  if (img) img.src = 'data:image/png;base64,' + data.screenshot;
-  if (data.url) document.getElementById('urlBar').textContent = data.url;
+  if (img) {
+    img.src = 'data:image/png;base64,' + data.screenshot;
+    img.classList.remove('dimmed');
+  }
+  if (data.url) document.getElementById('urlBar').value = data.url;
 }
 
 function bindScreenshotEvents() {
@@ -695,11 +749,13 @@ function bindScreenshotEvents() {
 
   img.addEventListener('click', (e) => {
     if (isAutonomousRunning || isHighlightMode) return;
-    const rect = img.getBoundingClientRect();
-    const relX = (e.clientX - rect.left) / rect.width;
-    const relY = (e.clientY - rect.top) / rect.height;
-    const vpX = Math.round(relX * vpWidth);
-    const vpY = Math.round(relY * vpHeight);
+    const info = getImageRenderInfo(img);
+    // Check if click is within the rendered image area
+    const localX = e.clientX - info.rect.left - info.offsetX;
+    const localY = e.clientY - info.rect.top - info.offsetY;
+    if (localX < 0 || localX > info.renderW || localY < 0 || localY > info.renderH) return;
+    const vpX = Math.round((localX / info.renderW) * vpWidth);
+    const vpY = Math.round((localY / info.renderH) * vpHeight);
 
     const viewport = document.getElementById('browserViewport');
     const ripple = document.createElement('div');
@@ -709,7 +765,8 @@ function bindScreenshotEvents() {
     viewport.appendChild(ripple);
     setTimeout(() => ripple.remove(), 600);
 
-    showLoading('Click...');
+    // Subtle dimming instead of loading overlay
+    img.classList.add('dimmed');
     sendWS({ action: 'click', x: vpX, y: vpY });
   });
 
@@ -756,14 +813,15 @@ function resizeHighlightCanvas() {
 
   // Wait for image to load for correct dimensions
   const doResize = () => {
-    const rect = img.getBoundingClientRect();
+    const info = getImageRenderInfo(img);
     const vpRect = document.getElementById('browserViewport').getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    canvas.style.left = (rect.left - vpRect.left) + 'px';
-    canvas.style.top = (rect.top - vpRect.top) + 'px';
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
+    // Size canvas to match rendered image area, not element box
+    canvas.width = info.renderW;
+    canvas.height = info.renderH;
+    canvas.style.left = (info.rect.left - vpRect.left + info.offsetX) + 'px';
+    canvas.style.top = (info.rect.top - vpRect.top + info.offsetY) + 'px';
+    canvas.style.width = info.renderW + 'px';
+    canvas.style.height = info.renderH + 'px';
   };
 
   if (img.complete) doResize();
@@ -862,6 +920,22 @@ function cancelHighlight() {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
+}
+
+// === Navigate to new URL in session ===
+function navigateToUrl() {
+  const urlBar = document.getElementById('urlBar');
+  const url = urlBar.value.trim();
+  if (!url) return;
+  urlBar.blur();
+  showLoading('Navigazione...');
+  sendWS({ action: 'navigate_url', url: url });
+}
+
+// === On-demand persona comment ===
+function requestComment() {
+  showLoading('La persona sta commentando...');
+  sendWS({ action: 'comment' });
 }
 
 // === Viewport toggle (in session) ===
