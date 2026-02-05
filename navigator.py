@@ -187,6 +187,40 @@ class AutonomousNavigator:
         return self.claude_client.parse_navigation_response(response)
 
 
+def _parse_simple_command(command: str) -> tuple:
+    """Prova a parsare comandi semplici senza LLM.
+
+    Returns:
+        (action, target) o (None, None) se non parsabile.
+    """
+    cmd = command.lower().strip()
+
+    # Scroll
+    if any(w in cmd for w in ['scroll giù', 'scroll giu', 'scorri', 'scendi', 'più giù', 'piu giu']):
+        return "scroll_down", ""
+    if any(w in cmd for w in ['scroll su', 'scorri su', 'sali', 'più su', 'piu su']):
+        return "scroll_up", ""
+
+    # Back
+    if any(w in cmd for w in ['indietro', 'torna', 'back', 'precedente']):
+        return "back", ""
+
+    # Click con testo esplicito: "clicca su LISTE", "vai a MAPPA", "apri CONTATTI"
+    import re
+    patterns = [
+        r"(?:clicca|click|premi|apri|vai)\s+(?:su|a|al|alla|in|su di)\s+[\"']?(.+?)[\"']?\s*$",
+        r"(?:clicca|click|premi|apri|vai)\s+[\"']?(.+?)[\"']?\s*$",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, cmd, re.IGNORECASE)
+        if match:
+            target = match.group(1).strip().strip('"\'')
+            if target:
+                return "click", target
+
+    return None, None
+
+
 async def execute_navigation_command(
     browser: BrowserManager,
     command: str,
@@ -195,40 +229,55 @@ async def execute_navigation_command(
     claude_client: AIClient
 ) -> Dict[str, Any]:
     """Esegue un comando di navigazione in modalita' guidata (async)."""
-    action_info = await claude_client.translate_command_to_action(
-        command=command,
-        current_url=current_url,
-        page_type=page_type
-    )
-
-    action = action_info.get("action", "scroll_down")
     screenshot = ""
     new_url = current_url
     success = True
 
-    if action == "click":
-        selector = action_info.get("selector", "")
-        if selector:
-            success, screenshot, new_url = await browser.click_element(selector)
-            if not success:
-                success, screenshot, new_url = await browser.click_element(command)
+    # Prima prova parsing semplice (senza LLM)
+    simple_action, simple_target = _parse_simple_command(command)
 
-    elif action == "goto":
-        url = action_info.get("url", "")
-        if url:
-            screenshot, new_url = await browser.navigate(url)
-
-    elif action == "scroll_down":
+    if simple_action == "scroll_down":
         screenshot, new_url = await browser.scroll_down()
-
-    elif action == "scroll_up":
+    elif simple_action == "scroll_up":
         screenshot, new_url = await browser.scroll_up()
-
-    elif action == "back":
+    elif simple_action == "back":
         screenshot, new_url = await browser.go_back()
-
+    elif simple_action == "click" and simple_target:
+        # Prova click diretto con testo
+        success, screenshot, new_url = await browser.click_element(simple_target)
+        if not success:
+            # Fallback: chiedi al LLM
+            action_info = await claude_client.translate_command_to_action(
+                command=command, current_url=current_url, page_type=page_type
+            )
+            selector = action_info.get("selector", "")
+            if selector:
+                success, screenshot, new_url = await browser.click_element(selector)
     else:
-        screenshot, new_url = await browser.scroll_down()
+        # Comando complesso: usa LLM
+        action_info = await claude_client.translate_command_to_action(
+            command=command, current_url=current_url, page_type=page_type
+        )
+        action = action_info.get("action", "scroll_down")
+
+        if action == "click":
+            selector = action_info.get("selector", "")
+            if selector:
+                success, screenshot, new_url = await browser.click_element(selector)
+                if not success:
+                    success, screenshot, new_url = await browser.click_element(command)
+        elif action == "goto":
+            url = action_info.get("url", "")
+            if url:
+                screenshot, new_url = await browser.navigate(url)
+        elif action == "scroll_down":
+            screenshot, new_url = await browser.scroll_down()
+        elif action == "scroll_up":
+            screenshot, new_url = await browser.scroll_up()
+        elif action == "back":
+            screenshot, new_url = await browser.go_back()
+        else:
+            screenshot, new_url = await browser.scroll_down()
 
     if not screenshot:
         screenshot = await browser.get_screenshot()
