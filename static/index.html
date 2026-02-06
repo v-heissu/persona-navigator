@@ -677,6 +677,11 @@ function prevTutorialStep() {
 function dismissTutorial() {
   if (currentTutorial) {
     localStorage.setItem(`tutorial_${currentTutorial.name}_dismissed`, '1');
+    // When completing setup tutorial, reset session tutorial so it shows fresh
+    if (currentTutorial.name === 'setup') {
+      localStorage.removeItem('tutorial_session_dismissed');
+      sessionTutorialShown = false;
+    }
   }
   document.getElementById('tutorialOverlay').classList.remove('visible');
   currentTutorial = null;
@@ -895,6 +900,10 @@ function setViewport(vp) {
 function startSession() {
   const url = document.getElementById('urlInput').value.trim();
   if (!url) { showToast('Inserisci un URL', true); return; }
+
+  // Reset session tutorial for fresh experience
+  localStorage.removeItem('tutorial_session_dismissed');
+  sessionTutorialShown = false;
 
   selectedPersonaId = document.getElementById('personaSelect').value;
   const customProfile = customizedProfiles[selectedPersonaId] || '';
