@@ -229,31 +229,21 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .btn-editor-reset:hover{border-color:var(--text3)}
 .btn-editor-cancel{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
 
-/* Tutorial overlay */
-.tutorial-overlay{position:fixed;inset:0;background:transparent;z-index:200;display:none;pointer-events:none}
-.tutorial-overlay.visible{display:block}
-.tutorial-tooltip{pointer-events:auto}
-.tutorial-spotlight{position:absolute;box-shadow:0 0 0 9999px rgba(15,15,19,.85);border-radius:8px;pointer-events:none;transition:all .3s ease}
-.tutorial-tooltip{position:absolute;background:var(--bg2);border:1px solid var(--accent);border-radius:var(--radius);padding:16px 20px;max-width:320px;z-index:201;box-shadow:0 8px 32px rgba(0,0,0,.4)}
-.tutorial-tooltip::before{content:'';position:absolute;width:12px;height:12px;background:var(--bg2);border:1px solid var(--accent);transform:rotate(45deg)}
-.tutorial-tooltip.arrow-top::before{top:-7px;left:24px;border-right:none;border-bottom:none}
-.tutorial-tooltip.arrow-bottom::before{bottom:-7px;left:24px;border-left:none;border-top:none}
-.tutorial-tooltip.arrow-left::before{left:-7px;top:20px;border-right:none;border-top:none}
-.tutorial-tooltip.arrow-right::before{right:-7px;top:20px;border-left:none;border-bottom:none}
-.tutorial-step{font-size:.7rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-.tutorial-title{font-size:1rem;font-weight:600;margin-bottom:8px;color:var(--text)}
-.tutorial-desc{font-size:.85rem;color:var(--text2);line-height:1.5;margin-bottom:16px}
-.tutorial-actions{display:flex;gap:8px;justify-content:space-between;align-items:center}
-.tutorial-nav{display:flex;gap:8px}
-.tutorial-btn{padding:8px 16px;border-radius:6px;font-size:.8rem;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit}
-.tutorial-btn-next{background:var(--accent);color:#fff;border:none}
-.tutorial-btn-next:hover{background:var(--accent2)}
-.tutorial-btn-skip{background:transparent;color:var(--text3);border:none;font-size:.75rem}
-.tutorial-btn-skip:hover{color:var(--text2)}
-.tutorial-btn-prev{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
-.tutorial-dots{display:flex;gap:6px}
-.tutorial-dot{width:6px;height:6px;border-radius:50%;background:var(--bg4)}
-.tutorial-dot.active{background:var(--accent)}
+/* Tutorial modal - simple centered approach */
+.tutorial-overlay{position:fixed;inset:0;background:rgba(15,15,19,.9);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center}
+.tutorial-overlay.visible{display:flex}
+.tutorial-modal{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.tutorial-modal h3{font-size:1.1rem;font-weight:600;margin-bottom:20px;color:var(--text);display:flex;align-items:center;gap:10px}
+.tutorial-modal h3 span{font-size:1.3rem}
+.tutorial-list{list-style:none;margin-bottom:24px}
+.tutorial-list li{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--bg4)}
+.tutorial-list li:last-child{border-bottom:none}
+.tutorial-list .icon{font-size:1.2rem;width:28px;text-align:center;flex-shrink:0}
+.tutorial-list .text{flex:1}
+.tutorial-list .text strong{display:block;font-size:.9rem;color:var(--text);margin-bottom:2px}
+.tutorial-list .text span{font-size:.8rem;color:var(--text3)}
+.tutorial-btn{padding:10px 20px;border-radius:var(--radius-sm);font-size:.9rem;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit;width:100%;background:var(--accent);color:#fff;border:none}
+.tutorial-btn:hover{background:var(--accent2)}
 </style>
 </head>
 <body>
@@ -472,21 +462,12 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
   </div>
 </div>
 
-<!-- Tutorial Overlay -->
-<div class="tutorial-overlay" id="tutorialOverlay">
-  <div class="tutorial-spotlight" id="tutorialSpotlight"></div>
-  <div class="tutorial-tooltip" id="tutorialTooltip">
-    <div class="tutorial-step" id="tutorialStepLabel">Step 1 di 3</div>
-    <div class="tutorial-title" id="tutorialTitle">Titolo</div>
-    <div class="tutorial-desc" id="tutorialDesc">Descrizione</div>
-    <div class="tutorial-actions">
-      <button class="tutorial-btn tutorial-btn-skip" onclick="dismissTutorial()">Salta tutorial</button>
-      <div class="tutorial-nav">
-        <button class="tutorial-btn tutorial-btn-prev" id="tutorialPrevBtn" onclick="prevTutorialStep()">Indietro</button>
-        <button class="tutorial-btn tutorial-btn-next" id="tutorialNextBtn" onclick="nextTutorialStep()">Avanti</button>
-      </div>
-    </div>
-    <div class="tutorial-dots" id="tutorialDots"></div>
+<!-- Tutorial Modal -->
+<div class="tutorial-overlay" id="tutorialOverlay" onclick="if(event.target===this)dismissTutorial()">
+  <div class="tutorial-modal" id="tutorialModal">
+    <h3 id="tutorialTitle"><span>📖</span> Come iniziare</h3>
+    <ul class="tutorial-list" id="tutorialList"></ul>
+    <button class="tutorial-btn" onclick="dismissTutorial()">Ho capito, iniziamo!</button>
   </div>
 </div>
 
@@ -521,173 +502,55 @@ let lastNavUrl = '';
 // Persona customizations (session-only)
 let customizedProfiles = {}; // personaId -> custom full_profile
 
-// === Tutorial System ===
-const TUTORIAL_SETUP = [
-  {
-    target: '#personaSelect',
-    title: 'Scegli la persona',
-    desc: 'Seleziona chi navigherà il sito: utenti tipo o lo specialista UX/CRO per analisi professionali.',
-    arrow: 'top'
-  },
-  {
-    target: '#urlInput',
-    title: 'Inserisci l\'URL',
-    desc: 'Incolla l\'indirizzo del sito che vuoi far analizzare.',
-    arrow: 'top'
-  },
-  {
-    target: '#autoContextBtn',
-    title: 'Genera contesto automatico',
-    desc: 'Clicca "Auto" per far analizzare il sito all\'AI e generare automaticamente una descrizione del contesto.',
-    arrow: 'top'
-  },
-  {
-    target: '#startBtn',
-    title: 'Avvia l\'ispezione',
-    desc: 'Clicca per avviare il browser e iniziare a navigare insieme alla persona.',
-    arrow: 'top'
-  }
+// === Tutorial System (simple modal approach) ===
+const TUTORIAL_SETUP_ITEMS = [
+  { icon: '👤', title: 'Scegli la persona', desc: 'Utenti tipo o specialista UX/CRO' },
+  { icon: '🔗', title: 'Inserisci URL', desc: 'Il sito da far analizzare' },
+  { icon: '✨', title: 'Contesto (opzionale)', desc: 'Clicca "Auto" per generarlo con AI' },
+  { icon: '🚀', title: 'Avvia ispezione', desc: 'Il browser si aprirà e potrai navigare' }
 ];
 
-const TUTORIAL_SESSION = [
-  {
-    target: '#browserViewport',
-    title: 'Naviga il sito',
-    desc: 'Clicca sullo screenshot per navigare: link, bottoni, menu. La pagina si aggiornerà in tempo reale.',
-    arrow: 'right'
-  },
-  {
-    target: '#commentBtn',
-    title: 'Commenta',
-    desc: 'Chiedi alla persona di commentare ciò che vede in questo momento sullo schermo.',
-    arrow: 'bottom'
-  },
-  {
-    target: '#highlightBtn',
-    title: 'Evidenzia area',
-    desc: 'Seleziona un\'area specifica e chiedi alla persona cosa ne pensa.',
-    arrow: 'bottom'
-  },
-  {
-    target: '#fullScanBtn',
-    title: 'Scrolla tutto',
-    desc: 'Scansiona l\'intera pagina dall\'alto al basso per una valutazione completa.',
-    arrow: 'bottom'
-  },
-  {
-    target: '#chatInput',
-    title: 'Fai domande',
-    desc: 'Scrivi liberamente per chiedere opinioni, fare domande o dare comandi di navigazione.',
-    arrow: 'top'
-  }
+const TUTORIAL_SESSION_ITEMS = [
+  { icon: '👆', title: 'Clicca per navigare', desc: 'Link, bottoni, menu funzionano' },
+  { icon: '💬', title: 'Commenta', desc: 'Chiedi feedback sulla schermata' },
+  { icon: '🔲', title: 'Evidenzia area', desc: 'Seleziona una zona specifica' },
+  { icon: '📜', title: 'Scrolla tutto', desc: 'Analisi completa della pagina' },
+  { icon: '✏️', title: 'Chat', desc: 'Fai domande o dai comandi' }
 ];
 
-let currentTutorial = null;
-let currentTutorialStep = 0;
+let currentTutorialName = null;
 
-// Setup tutorial: localStorage (show once per browser)
-// Session tutorial: always show on new session (no localStorage)
 function showSetupTutorial() {
   if (localStorage.getItem('tutorial_setup_dismissed')) return;
-  currentTutorial = { steps: TUTORIAL_SETUP, name: 'setup' };
-  currentTutorialStep = 0;
-  document.getElementById('tutorialOverlay').classList.add('visible');
-  renderTutorialStep();
+  currentTutorialName = 'setup';
+  renderTutorial('Come iniziare', TUTORIAL_SETUP_ITEMS);
 }
 
 function showSessionTutorial() {
-  currentTutorial = { steps: TUTORIAL_SESSION, name: 'session' };
-  currentTutorialStep = 0;
+  currentTutorialName = 'session';
+  renderTutorial('Strumenti disponibili', TUTORIAL_SESSION_ITEMS);
+}
+
+function renderTutorial(title, items) {
+  document.getElementById('tutorialTitle').innerHTML = `<span>📖</span> ${title}`;
+  document.getElementById('tutorialList').innerHTML = items.map(item => `
+    <li>
+      <div class="icon">${item.icon}</div>
+      <div class="text">
+        <strong>${item.title}</strong>
+        <span>${item.desc}</span>
+      </div>
+    </li>
+  `).join('');
   document.getElementById('tutorialOverlay').classList.add('visible');
-  renderTutorialStep();
-}
-
-function renderTutorialStep() {
-  if (!currentTutorial) return;
-  const { steps } = currentTutorial;
-  const step = steps[currentTutorialStep];
-  const target = document.querySelector(step.target);
-
-  // Update tooltip content
-  document.getElementById('tutorialStepLabel').textContent = `Step ${currentTutorialStep + 1} di ${steps.length}`;
-  document.getElementById('tutorialTitle').textContent = step.title;
-  document.getElementById('tutorialDesc').textContent = step.desc;
-
-  // Update dots
-  const dotsEl = document.getElementById('tutorialDots');
-  dotsEl.innerHTML = steps.map((_, i) =>
-    `<div class="tutorial-dot ${i === currentTutorialStep ? 'active' : ''}"></div>`
-  ).join('');
-
-  // Update buttons
-  document.getElementById('tutorialPrevBtn').style.display = currentTutorialStep === 0 ? 'none' : '';
-  document.getElementById('tutorialNextBtn').textContent = currentTutorialStep === steps.length - 1 ? 'Fine' : 'Avanti';
-
-  // Position spotlight and tooltip
-  const spotlight = document.getElementById('tutorialSpotlight');
-  const tooltip = document.getElementById('tutorialTooltip');
-
-  if (target) {
-    const rect = target.getBoundingClientRect();
-    const pad = 8;
-    spotlight.style.left = (rect.left - pad) + 'px';
-    spotlight.style.top = (rect.top - pad) + 'px';
-    spotlight.style.width = (rect.width + pad * 2) + 'px';
-    spotlight.style.height = (rect.height + pad * 2) + 'px';
-    spotlight.style.display = 'block';
-
-    // Remove old arrow classes
-    tooltip.className = 'tutorial-tooltip arrow-' + step.arrow;
-
-    // Position tooltip
-    const gap = 16;
-    if (step.arrow === 'top') {
-      tooltip.style.left = rect.left + 'px';
-      tooltip.style.top = (rect.bottom + gap) + 'px';
-    } else if (step.arrow === 'bottom') {
-      tooltip.style.left = rect.left + 'px';
-      tooltip.style.top = (rect.top - tooltip.offsetHeight - gap) + 'px';
-    } else if (step.arrow === 'left') {
-      tooltip.style.left = (rect.right + gap) + 'px';
-      tooltip.style.top = rect.top + 'px';
-    } else if (step.arrow === 'right') {
-      tooltip.style.left = (rect.left - tooltip.offsetWidth - gap) + 'px';
-      tooltip.style.top = rect.top + 'px';
-    }
-  } else {
-    spotlight.style.display = 'none';
-    tooltip.style.left = '50%';
-    tooltip.style.top = '50%';
-    tooltip.style.transform = 'translate(-50%, -50%)';
-  }
-}
-
-function nextTutorialStep() {
-  if (!currentTutorial) return;
-  if (currentTutorialStep < currentTutorial.steps.length - 1) {
-    currentTutorialStep++;
-    renderTutorialStep();
-  } else {
-    dismissTutorial();
-  }
-}
-
-function prevTutorialStep() {
-  if (currentTutorialStep > 0) {
-    currentTutorialStep--;
-    renderTutorialStep();
-  }
 }
 
 function dismissTutorial() {
-  if (currentTutorial) {
-    // Only persist setup tutorial dismissal (session tutorial shows every time)
-    if (currentTutorial.name === 'setup') {
-      localStorage.setItem('tutorial_setup_dismissed', '1');
-    }
+  if (currentTutorialName === 'setup') {
+    localStorage.setItem('tutorial_setup_dismissed', '1');
   }
   document.getElementById('tutorialOverlay').classList.remove('visible');
-  currentTutorial = null;
+  currentTutorialName = null;
 }
 
 // === Coordinate mapping for object-fit:contain ===
