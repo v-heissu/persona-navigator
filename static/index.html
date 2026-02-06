@@ -51,6 +51,15 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
   color:var(--text);font-size:.85rem;outline:none;transition:border .2s;font-family:inherit;resize:vertical;line-height:1.5}
 .field textarea:focus{border-color:var(--accent)}
 
+/* Context auto-fill */
+.context-row{display:flex;gap:8px;align-items:flex-start}
+.context-row textarea{flex:1}
+.btn-auto-context{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--accent);background:var(--accent-glow);color:var(--accent2);font-size:.75rem;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:4px;white-space:nowrap;height:fit-content}
+.btn-auto-context:hover{background:var(--accent);color:#fff}
+.btn-auto-context:disabled{opacity:.5;cursor:not-allowed}
+.btn-auto-context.loading{pointer-events:none}
+.btn-auto-context.loading svg{animation:spin .8s linear infinite}
+
 /* Persona selector row */
 .persona-row{display:flex;gap:8px;align-items:center}
 .persona-row select{flex:1}
@@ -221,8 +230,9 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .btn-editor-cancel{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
 
 /* Tutorial overlay */
-.tutorial-overlay{position:fixed;inset:0;background:rgba(15,15,19,.85);z-index:200;display:none;pointer-events:all}
+.tutorial-overlay{position:fixed;inset:0;background:transparent;z-index:200;display:none;pointer-events:none}
 .tutorial-overlay.visible{display:block}
+.tutorial-tooltip{pointer-events:auto}
 .tutorial-spotlight{position:absolute;box-shadow:0 0 0 9999px rgba(15,15,19,.85);border-radius:8px;pointer-events:none;transition:all .3s ease}
 .tutorial-tooltip{position:absolute;background:var(--bg2);border:1px solid var(--accent);border-radius:var(--radius);padding:16px 20px;max-width:320px;z-index:201;box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .tutorial-tooltip::before{content:'';position:absolute;width:12px;height:12px;background:var(--bg2);border:1px solid var(--accent);transform:rotate(45deg)}
@@ -294,8 +304,14 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 
       <div class="field">
         <label>Contesto del sito (opzionale)</label>
-        <textarea id="siteContext" rows="3" placeholder="Descrivi brevemente il sito: cos'e', cosa offre, a chi si rivolge..."></textarea>
-        <div class="field-desc">Migliora la qualita' dei commenti dando contesto alla persona</div>
+        <div class="context-row">
+          <textarea id="siteContext" rows="3" placeholder="Descrivi brevemente il sito: cos'e', cosa offre, a chi si rivolge..."></textarea>
+          <button class="btn-auto-context" id="autoContextBtn" onclick="autoFillContext()" title="Genera automaticamente con AI">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            Auto
+          </button>
+        </div>
+        <div class="field-desc">Migliora la qualita' dei commenti dando contesto alla persona. Clicca "Auto" per generarlo dall'URL.</div>
       </div>
 
       <div class="field">
@@ -510,13 +526,19 @@ const TUTORIAL_SETUP = [
   {
     target: '#personaSelect',
     title: 'Scegli la persona',
-    desc: 'Seleziona chi navigherà il sito: ogni persona ha personalità, obiettivi e comportamento diversi.',
+    desc: 'Seleziona chi navigherà il sito: utenti tipo o lo specialista UX/CRO per analisi professionali.',
     arrow: 'top'
   },
   {
     target: '#urlInput',
     title: 'Inserisci l\'URL',
-    desc: 'Incolla l\'indirizzo del sito che vuoi far analizzare dalla persona.',
+    desc: 'Incolla l\'indirizzo del sito che vuoi far analizzare.',
+    arrow: 'top'
+  },
+  {
+    target: '#autoContextBtn',
+    title: 'Genera contesto automatico',
+    desc: 'Clicca "Auto" per far analizzare il sito all\'AI e generare automaticamente una descrizione del contesto.',
     arrow: 'top'
   },
   {
@@ -1362,6 +1384,44 @@ function showToast(msg, isError) {
 function esc(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// === Auto-fill context ===
+async function autoFillContext() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) {
+    showToast('Inserisci prima un URL', true);
+    return;
+  }
+
+  const btn = document.getElementById('autoContextBtn');
+  const textarea = document.getElementById('siteContext');
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/></svg> Analizzo...';
+
+  try {
+    const res = await fetch('/api/analyze-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      showToast('Errore: ' + data.error, true);
+    } else if (data.context) {
+      textarea.value = data.context;
+      showToast('Contesto generato');
+    }
+  } catch (e) {
+    showToast('Errore di connessione', true);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Auto';
+  }
 }
 </script>
 </body>

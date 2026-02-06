@@ -96,6 +96,31 @@ async def get_page_suggestions(page_type: str):
     return get_suggestions(page_type)
 
 
+@app.post("/api/analyze-context")
+async def analyze_context(data: dict):
+    """Analizza un URL e genera automaticamente il contesto del sito."""
+    url = data.get("url", "").strip()
+    if not url:
+        return {"error": "URL mancante"}
+
+    browser = None
+    try:
+        ai = AIClient()
+        browser = BrowserManager()
+        await browser.start()
+        await browser.set_viewport("desktop")
+        screenshot, final_url = await browser.navigate(url)
+
+        context = await ai.analyze_site_context(screenshot, final_url)
+        return {"context": context, "url": final_url}
+    except Exception as e:
+        logger.error(f"Errore analisi contesto: {e}")
+        return {"error": str(e)}
+    finally:
+        if browser:
+            await browser.stop()
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
