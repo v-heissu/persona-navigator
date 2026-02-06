@@ -1,51 +1,85 @@
-# Personas Navigator
+# Persona Navigator
 
-App web per workshop che simula la navigazione di un sito attraverso personas predefinite. Le personas navigano autonomamente o in modo guidato, commentano in tempo reale e rispondono a domande. Ideale per generare ipotesi qualitative durante workshop con clienti.
+App web per analizzare siti attraverso personas predefinite o personalizzate. Le personas navigano in modo guidato, commentano in tempo reale e rispondono a domande. Ideale per generare ipotesi qualitative durante workshop con clienti o audit UX.
+
+## Come Funziona
+
+1. **Scegli una persona** - Utente tipo (foodie), esperto UX/CRO, o crea la tua
+2. **Inserisci l'URL** - Il sito da analizzare
+3. **Naviga e interagisci** - Clicca, scrolla, chiedi opinioni
+4. **Genera insights** - Report strutturato con raccomandazioni
 
 ## Funzionalita'
 
-- **3 Personas predefinite**: Marco (Casual Foodie), Giulia (Active Foodie), Roberto (Super Foodie)
-- **Modalita' Guidata**: L'operatore controlla la navigazione e pone domande
-- **Modalita' Autonoma**: La persona decide autonomamente dove navigare
-- **Rilevamento automatico**: Identifica il tipo di pagina (homepage, menu, booking, etc.)
-- **Suggerimenti contestuali**: Domande suggerite in base al tipo di pagina
-- **Gestione cookie banner**: Chiusura automatica best-effort
-- **Export Markdown**: Esporta la sessione per analisi successiva
+### Personas
+
+- **Marco - Casual Foodie**: 28-45 anni, cerca convivialita' e occasioni speciali
+- **Giulia - Active Foodie**: 35-50 anni, early adopter, cerca esperienze uniche
+- **Roberto - Super Foodie**: 40-65 anni, fine dining settimanale, network gastronomico
+- **Alex - UX/CRO Specialist**: Esperto UX e ottimizzazione conversioni, analizza usabilita' e friction points
+
+### Crea la Tua Persona
+
+Puoi creare personas temporanee per la sessione:
+- Scegli un'icona tra 15 emoji disponibili
+- Inserisci nome, descrizione breve e profilo completo
+- La persona viene aggiunta al dropdown e selezionata automaticamente
+
+### Interazione con il Sito
+
+- **Click per navigare** - Clicca su link, bottoni e menu come faresti normalmente
+- **Commenta** - La persona commenta quello che vede nella schermata corrente
+- **Evidenzia area** - Seleziona un'area specifica e chiedi un parere
+- **Scrolla tutto** - La persona scrolla l'intera pagina e da' una valutazione completa
+- **Chat** - Fai domande, chiedi opinioni o dai comandi di navigazione
+
+### Contesto Automatico
+
+- Clicca "Auto" accanto al campo contesto per generare automaticamente una descrizione del sito usando AI
+- Il contesto aiuta la persona a capire cosa sta navigando
+
+### Analisi Insights
+
+Al termine della sessione:
+- Genera un report strutturato con raccomandazioni
+- Copia il report con un click per incollarlo altrove
+- Esporta la sessione completa in Markdown
 
 ## Stack Tecnico
 
-- Python 3.11+
-- Streamlit (UI)
-- Playwright (browser automation con Chromium)
-- Anthropic API (Claude Sonnet con vision)
-- Deploy su Railway
+- **Backend**: Python 3.11+, FastAPI
+- **Frontend**: HTML/CSS/JavaScript vanilla
+- **Browser**: Playwright con Chromium headless
+- **AI**: Google Gemini API (Vision + Text)
+- **Deploy**: Railway con Docker
 
 ## Struttura Progetto
 
 ```
-personas-navigator/
-├── app.py                 # Main Streamlit app
+persona-navigator/
+├── app.py                 # FastAPI backend con WebSocket
+├── ai_client.py           # Gemini API wrapper (vision + chat)
 ├── personas.py            # Definizioni personas + prompt templates
-├── suggestions.py         # Suggerimenti contestuali per tipo pagina
-├── browser.py             # Playwright wrapper (screenshot, navigazione)
-├── claude_client.py       # Anthropic API wrapper (vision + chat)
-├── navigator.py           # Logica navigazione autonoma
-├── page_detector.py       # Rilevamento tipo pagina
-├── exporter.py            # Export sessione markdown
+├── browser_manager.py     # Playwright wrapper (screenshot, navigazione)
+├── static/
+│   └── index.html         # Frontend single-page app
 ├── requirements.txt
 ├── Dockerfile
+├── railway.toml
 └── README.md
 ```
 
 ## Installazione Locale
 
-1. Clona il repository:
+### 1. Clona il repository
+
 ```bash
 git clone <repo-url>
-cd personas-navigator
+cd persona-navigator
 ```
 
-2. Crea un virtual environment:
+### 2. Crea un virtual environment
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
@@ -53,92 +87,91 @@ source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate  # Windows
 ```
 
-3. Installa le dipendenze:
+### 3. Installa le dipendenze
+
 ```bash
 pip install -r requirements.txt
 playwright install chromium
 playwright install-deps
 ```
 
-4. Configura la variabile d'ambiente:
+### 4. Configura la variabile d'ambiente
+
 ```bash
-export ANTHROPIC_API_KEY=your_api_key_here
+export GEMINI_API_KEY=your_api_key_here
 ```
 
-5. Avvia l'applicazione:
-```bash
-streamlit run app.py
+Oppure crea un file `.env`:
 ```
+GEMINI_API_KEY=your_api_key_here
+```
+
+### 5. Avvia l'applicazione
+
+```bash
+python app.py
+```
+
+L'app sara' disponibile su `http://localhost:8000`
 
 ## Deploy su Railway
 
 1. Crea un nuovo progetto su Railway
 2. Connetti il repository GitHub
-3. Aggiungi la variabile d'ambiente `ANTHROPIC_API_KEY`
+3. Aggiungi la variabile d'ambiente `GEMINI_API_KEY`
 4. Deploy automatico tramite Dockerfile
 
-## Utilizzo
+## Utilizzo Passo-Passo
 
-### Setup Sessione
-1. Seleziona una persona dal dropdown
-2. Inserisci l'URL del sito da analizzare
-3. Scegli la modalita': Guidata o Autonoma
-4. Se Autonoma: seleziona obiettivo e numero max di pagine
-5. Click su "Avvia navigazione"
+### Setup Iniziale
 
-### Modalita' Guidata
-- L'operatore scrive comandi di navigazione ("vai al menu", "scorri", "torna indietro")
-- L'operatore pone domande alla persona ("prenoteresti?", "cosa ti manca?")
-- La persona risponde sempre in character
-- Usa i suggerimenti contestuali per domande rapide
+1. **Seleziona persona**: Scegli dal dropdown o crea una nuova
+2. **Inserisci URL**: L'indirizzo completo del sito (es. `https://example.com`)
+3. **Contesto (opzionale)**: Descrivi il sito o usa "Auto" per generarlo con AI
+4. **Avvia**: Click su "Avvia Ispezione"
 
-### Modalita' Autonoma
-- La persona naviga autonomamente verso l'obiettivo selezionato
-- Pausa 3 secondi tra ogni azione per leggibilita'
-- Controlli disponibili:
-  - **Pausa**: Ferma per fare domande
-  - **Salta attesa**: Accelera la navigazione
-  - **Stop -> Q&A**: Termina navigazione e passa a domande libere
+### Durante la Sessione
 
-### Export
-- Click su "Esporta MD" per scaricare la sessione in Markdown
-- Click su "Nuova sessione" per ricominciare
+- **Navigare**: Clicca direttamente sulla preview del sito
+- **Commento rapido**: Bottone "Commenta" per reazione alla pagina corrente
+- **Area specifica**: Bottone "Evidenzia" per selezionare e chiedere parere su un'area
+- **Full page**: Bottone "Scrolla tutto" per analisi completa della pagina
+- **Domande libere**: Scrivi nella chat per interagire con la persona
 
-## Personas
+### Generare Insights
 
-### Marco - Casual Foodie
-- 28-45 anni, expertise intermedia
-- Cerca occasioni speciali, convivialita', prezzi accessibili
-- Tono: diretto, alla mano, colloquiale
+1. Naviga alcune pagine del sito
+2. Click su "Genera Insights" nella sidebar
+3. Attendi l'analisi (puo' richiedere qualche secondo)
+4. Il report include:
+   - Reazioni chiave
+   - Cosa ha funzionato
+   - Cosa non ha funzionato
+   - Bisogni non soddisfatti
+   - Raccomandazioni prioritizzate
+5. Usa "Copia" per copiare il report negli appunti
 
-### Giulia - Active Foodie
-- 35-50 anni, expertise avanzata
-- Early adopter, cerca chef emergenti e esperienze uniche
-- Tono: competente, fa confronti, nota dettagli
+### Esportare la Sessione
 
-### Roberto - Super Foodie
-- 40-65 anni, expertise elevata
-- Fine dining settimanale, network gastronomico
-- Tono: riflessivo, riferimenti colti, puo' essere tagliente
+Click su "Esporta MD" per scaricare l'intera conversazione in formato Markdown.
 
 ## Variabili d'Ambiente
 
 | Variabile | Descrizione | Obbligatoria |
 |-----------|-------------|--------------|
-| `ANTHROPIC_API_KEY` | API key per Claude | Si |
+| `GEMINI_API_KEY` | API key per Google Gemini | Si |
+| `PORT` | Porta del server (default: 8000) | No |
 
 ## Limitazioni
 
 - Non supporta siti con login required
-- Una sola persona alla volta
-- Nessuna persistenza sessioni su database
+- Una sola persona alla volta per sessione
+- Personas create sono temporanee (non persistono tra sessioni)
 - Nessuna autenticazione utenti
 
-## Estensioni Future (v2)
+## Tips per Risultati Migliori
 
-- Confronto side-by-side tra personas
-- Personas custom uploadabili
-- Template per altri settori (hotel, ecommerce, SaaS)
-- Riepilogo automatico insight
-- Integrazione Notion/Google Docs
-- Recording sessione per replay
+- **Contesto preciso**: Un buon contesto aiuta la persona a capire cosa sta guardando
+- **Naviga diverse pagine**: Piu' pagine esplori, migliori saranno gli insights
+- **Fai domande specifiche**: "Prenoteresti qui?" e' meglio di "Cosa ne pensi?"
+- **Usa la persona giusta**: Alex UX per audit tecnici, personas foodie per prospettiva utente

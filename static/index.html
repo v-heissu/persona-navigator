@@ -199,6 +199,9 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .insights-header h3{font-size:1.1rem;font-weight:600}
 .insights-close{width:32px;height:32px;border-radius:50%;border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .insights-close:hover{border-color:var(--text3);color:var(--text)}
+.btn-copy-insights{padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.75rem;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;font-family:inherit}
+.btn-copy-insights:hover{border-color:var(--accent);color:var(--accent)}
+.btn-copy-insights.copied{border-color:var(--green);color:var(--green)}
 .insights-body{flex:1;overflow-y:auto;padding:24px;font-size:.88rem;line-height:1.7;color:var(--text)}
 .insights-body::-webkit-scrollbar{width:4px}
 .insights-body::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
@@ -244,6 +247,24 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .tutorial-list .text span{font-size:.8rem;color:var(--text3)}
 .tutorial-btn{padding:10px 20px;border-radius:var(--radius-sm);font-size:.9rem;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit;width:100%;background:var(--accent);color:#fff;border:none}
 .tutorial-btn:hover{background:var(--accent2)}
+
+/* Create persona modal */
+.create-persona-overlay{position:fixed;inset:0;background:rgba(15,15,19,.9);backdrop-filter:blur(6px);z-index:150;display:none;align-items:center;justify-content:center;padding:24px}
+.create-persona-overlay.visible{display:flex}
+.create-persona-panel{background:var(--bg2);border:1px solid var(--bg3);border-radius:var(--radius);max-width:500px;width:100%;max-height:85vh;display:flex;flex-direction:column}
+.create-persona-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--bg3)}
+.create-persona-header h3{font-size:1.1rem;font-weight:600}
+.create-persona-body{flex:1;overflow-y:auto;padding:24px}
+.create-persona-body .field{margin-bottom:16px}
+.icon-picker{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.icon-picker button{width:42px;height:42px;border-radius:var(--radius-sm);border:2px solid var(--bg4);background:var(--bg);font-size:1.3rem;cursor:pointer;transition:all .2s}
+.icon-picker button:hover{border-color:var(--text3)}
+.icon-picker button.selected{border-color:var(--accent);background:var(--accent-glow)}
+.create-persona-footer{padding:16px 24px;border-top:1px solid var(--bg3);display:flex;gap:8px;justify-content:flex-end}
+.create-persona-footer button{padding:8px 20px;border-radius:var(--radius-sm);font-size:.85rem;cursor:pointer;font-family:inherit;font-weight:500;transition:all .2s}
+.btn-create-save{background:var(--accent);color:#fff;border:none}
+.btn-create-save:hover{background:var(--accent2)}
+.btn-create-cancel{background:var(--bg);color:var(--text2);border:1px solid var(--bg4)}
 </style>
 </head>
 <body>
@@ -276,6 +297,7 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
         <label>Persona</label>
         <div class="persona-row">
           <select id="personaSelect"></select>
+          <button class="btn-edit-persona" onclick="openCreatePersona()">+ Crea</button>
           <button class="btn-edit-persona" onclick="openPersonaEditor()">Personalizza</button>
         </div>
         <div class="persona-preview" id="personaPreview">
@@ -446,12 +468,72 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
   </div>
 </div>
 
+<!-- Create Persona Modal -->
+<div class="create-persona-overlay" id="createPersonaOverlay" onclick="if(event.target===this)closeCreatePersona()">
+  <div class="create-persona-panel">
+    <div class="create-persona-header">
+      <h3>Crea nuova persona</h3>
+      <button class="insights-close" onclick="closeCreatePersona()">&times;</button>
+    </div>
+    <div class="create-persona-body">
+      <div class="field">
+        <label>Icona</label>
+        <div class="icon-picker" id="iconPicker">
+          <button type="button" data-icon="👤">👤</button>
+          <button type="button" data-icon="👩">👩</button>
+          <button type="button" data-icon="👨">👨</button>
+          <button type="button" data-icon="🧑‍💼">🧑‍💼</button>
+          <button type="button" data-icon="👩‍💻">👩‍💻</button>
+          <button type="button" data-icon="🧓">🧓</button>
+          <button type="button" data-icon="👶">👶</button>
+          <button type="button" data-icon="🎯">🎯</button>
+          <button type="button" data-icon="🛒">🛒</button>
+          <button type="button" data-icon="💼">💼</button>
+          <button type="button" data-icon="🎨">🎨</button>
+          <button type="button" data-icon="📱">📱</button>
+          <button type="button" data-icon="🔍">🔍</button>
+          <button type="button" data-icon="💡">💡</button>
+          <button type="button" data-icon="⭐">⭐</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Nome persona</label>
+        <input type="text" id="createPersonaName" placeholder="es. Maria - Mamma tech-savvy">
+      </div>
+      <div class="field">
+        <label>Descrizione breve</label>
+        <input type="text" id="createPersonaDesc" placeholder="es. 35-45 anni, cerca praticità e risparmio tempo">
+      </div>
+      <div class="field">
+        <label>Profilo completo</label>
+        <textarea id="createPersonaProfile" rows="8" placeholder="Descrivi la persona in dettaglio:
+- Chi è (età, lavoro, situazione)
+- Cosa cerca online
+- Come si comporta
+- Pain points e frustrazioni
+- Tono di voce (come parla)"></textarea>
+        <div class="field-desc">Più dettagli dai, più realistica sarà la simulazione</div>
+      </div>
+    </div>
+    <div class="create-persona-footer">
+      <button class="btn-create-cancel" onclick="closeCreatePersona()">Annulla</button>
+      <button class="btn-create-save" onclick="saveNewPersona()">Crea persona</button>
+    </div>
+  </div>
+</div>
+
 <!-- Insights Modal -->
 <div class="insights-overlay" id="insightsOverlay" onclick="if(event.target===this)closeInsights()">
   <div class="insights-panel">
     <div class="insights-header">
       <h3 id="insightsTitle">Insights</h3>
-      <button class="insights-close" onclick="closeInsights()">&times;</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-copy-insights" id="copyInsightsBtn" onclick="copyInsights()" title="Copia negli appunti">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copia
+        </button>
+        <button class="insights-close" onclick="closeInsights()">&times;</button>
+      </div>
     </div>
     <div class="insights-body" id="insightsBody">
       <div class="insights-loading">
@@ -504,18 +586,18 @@ let customizedProfiles = {}; // personaId -> custom full_profile
 
 // === Tutorial System (simple modal approach) ===
 const TUTORIAL_SETUP_ITEMS = [
-  { icon: '👤', title: 'Scegli la persona', desc: 'Utenti tipo o specialista UX/CRO' },
-  { icon: '🔗', title: 'Inserisci URL', desc: 'Il sito da far analizzare' },
-  { icon: '✨', title: 'Contesto (opzionale)', desc: 'Clicca "Auto" per generarlo con AI' },
-  { icon: '🚀', title: 'Avvia ispezione', desc: 'Il browser si aprirà e potrai navigare' }
+  { icon: '👤', title: 'Scegli la persona', desc: 'Chi analizzerà il sito: utente tipo, esperto UX, o crea la tua' },
+  { icon: '🔗', title: 'Inserisci URL', desc: 'L\'indirizzo completo del sito da analizzare' },
+  { icon: '✨', title: 'Contesto (opzionale)', desc: 'Clicca "Auto" per generare automaticamente con AI' },
+  { icon: '🚀', title: 'Avvia ispezione', desc: 'Si aprirà un browser virtuale che potrai controllare' }
 ];
 
 const TUTORIAL_SESSION_ITEMS = [
-  { icon: '👆', title: 'Clicca per navigare', desc: 'Link, bottoni, menu funzionano' },
-  { icon: '💬', title: 'Commenta', desc: 'Chiedi feedback sulla schermata' },
-  { icon: '🔲', title: 'Evidenzia area', desc: 'Seleziona una zona specifica' },
-  { icon: '📜', title: 'Scrolla tutto', desc: 'Analisi completa della pagina' },
-  { icon: '✏️', title: 'Chat', desc: 'Fai domande o dai comandi' }
+  { icon: '👆', title: 'Clicca per navigare', desc: 'Clicca su link, bottoni e menu come faresti normalmente' },
+  { icon: '💬', title: 'Commenta', desc: 'La persona commenterà quello che vede in questa schermata' },
+  { icon: '🔲', title: 'Evidenzia area', desc: 'Seleziona un\'area e chiedi un parere specifico' },
+  { icon: '📜', title: 'Scrolla tutto', desc: 'La persona scrollerà tutta la pagina e darà una valutazione completa' },
+  { icon: '✏️', title: 'Chat', desc: 'Fai domande, chiedi opinioni o dai comandi di navigazione' }
 ];
 
 let currentTutorialName = null;
@@ -1196,6 +1278,82 @@ function resetPersonaEdit() {
   showToast('Profilo ripristinato');
 }
 
+// === Create Persona ===
+let selectedCreateIcon = '👤';
+let tempPersonaCounter = 0;
+
+function openCreatePersona() {
+  selectedCreateIcon = '👤';
+  document.getElementById('createPersonaName').value = '';
+  document.getElementById('createPersonaDesc').value = '';
+  document.getElementById('createPersonaProfile').value = '';
+  // Reset icon selection
+  document.querySelectorAll('#iconPicker button').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.icon === '👤');
+  });
+  document.getElementById('createPersonaOverlay').classList.add('visible');
+}
+
+function closeCreatePersona() {
+  document.getElementById('createPersonaOverlay').classList.remove('visible');
+}
+
+// Icon picker events
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('iconPicker')?.addEventListener('click', (e) => {
+    if (e.target.dataset.icon) {
+      selectedCreateIcon = e.target.dataset.icon;
+      document.querySelectorAll('#iconPicker button').forEach(btn => {
+        btn.classList.toggle('selected', btn === e.target);
+      });
+    }
+  });
+});
+
+function saveNewPersona() {
+  const name = document.getElementById('createPersonaName').value.trim();
+  const desc = document.getElementById('createPersonaDesc').value.trim();
+  const profile = document.getElementById('createPersonaProfile').value.trim();
+
+  if (!name) {
+    showToast('Inserisci un nome per la persona', true);
+    return;
+  }
+  if (!profile) {
+    showToast('Inserisci il profilo della persona', true);
+    return;
+  }
+
+  // Create temporary persona
+  tempPersonaCounter++;
+  const tempId = `temp_${tempPersonaCounter}_${Date.now()}`;
+  const newPersona = {
+    id: tempId,
+    name: name,
+    description: desc || 'Persona personalizzata',
+    icon: selectedCreateIcon,
+    color: '#7c5cfc',
+    full_profile: profile
+  };
+
+  // Add to personasList
+  personasList.push(newPersona);
+
+  // Add to select
+  const sel = document.getElementById('personaSelect');
+  const opt = document.createElement('option');
+  opt.value = tempId;
+  opt.textContent = `${selectedCreateIcon} ${name}`;
+  sel.appendChild(opt);
+
+  // Select the new persona
+  sel.value = tempId;
+  updatePersonaPreview();
+
+  closeCreatePersona();
+  showToast('Persona creata!');
+}
+
 // === Export / New ===
 function exportSession() {
   sendWS({ action: 'export', mode: currentMode, objective: document.getElementById('objectiveSelect').value });
@@ -1225,6 +1383,7 @@ function generateInsights() {
 }
 
 function showInsights(content, personaName) {
+  lastInsightsContent = content || '';
   document.getElementById('insightsTitle').textContent = 'Insights - ' + (personaName || 'Persona');
   document.getElementById('insightsBody').innerHTML = renderMarkdown(content || 'Nessun insight disponibile.');
   document.getElementById('insightsOverlay').classList.add('visible');
@@ -1233,6 +1392,21 @@ function showInsights(content, personaName) {
 
 function closeInsights() {
   document.getElementById('insightsOverlay').classList.remove('visible');
+}
+
+let lastInsightsContent = '';
+
+function copyInsights() {
+  if (!lastInsightsContent) return;
+  navigator.clipboard.writeText(lastInsightsContent).then(() => {
+    const btn = document.getElementById('copyInsightsBtn');
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copiato!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg> Copia';
+    }, 2000);
+  });
 }
 
 function renderMarkdown(md) {
