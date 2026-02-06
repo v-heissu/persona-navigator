@@ -801,6 +801,12 @@ function handleEvent(data) {
     }
     updateSuggestions(data.suggestions || []);
     if (data.step && data.max_steps) updateProgress(data.step, data.max_steps);
+
+    // Show session tutorial after first page load
+    if (!sessionTutorialShown) {
+      sessionTutorialShown = true;
+      setTimeout(() => showTutorial(TUTORIAL_SESSION, 'session'), 500);
+    }
   }
 
   else if (ev === 'autonomous_step') {
@@ -913,6 +919,8 @@ function startSession() {
 }
 
 // === Session UI ===
+let sessionTutorialShown = false;
+
 function showSession() {
   document.getElementById('setup').style.display = 'none';
   document.getElementById('session').classList.add('active');
@@ -926,9 +934,6 @@ function showSession() {
     document.getElementById('chatPersonaName').textContent = p.name;
     document.getElementById('chatPersonaDesc').textContent = p.description || '';
   }
-
-  // Show session tutorial (delayed to allow layout to settle)
-  setTimeout(() => showTutorial(TUTORIAL_SESSION, 'session'), 800);
 
   if (isAutonomousRunning) {
     document.getElementById('autoControls').style.display = 'flex';
