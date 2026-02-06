@@ -585,13 +585,18 @@ const TUTORIAL_SESSION = [
 let currentTutorial = null;
 let currentTutorialStep = 0;
 
-function shouldShowTutorial(name) {
-  return !localStorage.getItem(`tutorial_${name}_dismissed`);
+// Setup tutorial: localStorage (show once per browser)
+// Session tutorial: always show on new session (no localStorage)
+function showSetupTutorial() {
+  if (localStorage.getItem('tutorial_setup_dismissed')) return;
+  currentTutorial = { steps: TUTORIAL_SETUP, name: 'setup' };
+  currentTutorialStep = 0;
+  document.getElementById('tutorialOverlay').classList.add('visible');
+  renderTutorialStep();
 }
 
-function showTutorial(steps, name) {
-  if (!shouldShowTutorial(name)) return;
-  currentTutorial = { steps, name };
+function showSessionTutorial() {
+  currentTutorial = { steps: TUTORIAL_SESSION, name: 'session' };
   currentTutorialStep = 0;
   document.getElementById('tutorialOverlay').classList.add('visible');
   renderTutorialStep();
@@ -676,11 +681,9 @@ function prevTutorialStep() {
 
 function dismissTutorial() {
   if (currentTutorial) {
-    localStorage.setItem(`tutorial_${currentTutorial.name}_dismissed`, '1');
-    // When completing setup tutorial, reset session tutorial so it shows fresh
+    // Only persist setup tutorial dismissal (session tutorial shows every time)
     if (currentTutorial.name === 'setup') {
-      localStorage.removeItem('tutorial_session_dismissed');
-      sessionTutorialShown = false;
+      localStorage.setItem('tutorial_setup_dismissed', '1');
     }
   }
   document.getElementById('tutorialOverlay').classList.remove('visible');
@@ -739,7 +742,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   connectWebSocket();
 
   // Show setup tutorial
-  setTimeout(() => showTutorial(TUTORIAL_SETUP, 'setup'), 500);
+  setTimeout(() => showSetupTutorial(), 500);
 });
 
 function updatePersonaPreview() {
@@ -810,7 +813,7 @@ function handleEvent(data) {
     // Show session tutorial after first page load
     if (!sessionTutorialShown) {
       sessionTutorialShown = true;
-      setTimeout(() => showTutorial(TUTORIAL_SESSION, 'session'), 500);
+      setTimeout(() => showSessionTutorial(), 500);
     }
   }
 
@@ -901,8 +904,7 @@ function startSession() {
   const url = document.getElementById('urlInput').value.trim();
   if (!url) { showToast('Inserisci un URL', true); return; }
 
-  // Reset session tutorial for fresh experience
-  localStorage.removeItem('tutorial_session_dismissed');
+  // Reset session tutorial flag for this new session
   sessionTutorialShown = false;
 
   selectedPersonaId = document.getElementById('personaSelect').value;
