@@ -196,6 +196,40 @@ Selector comuni:
             "reasoning": "Risposta non parsabile"
         }
 
+    async def analyze_site_context(self, image_base64: str, url: str) -> str:
+        """Analizza uno screenshot e genera una descrizione del contesto del sito."""
+        prompt = f"""Analizza questo screenshot della homepage del sito {url}.
+
+Genera una descrizione CONCISA (3-5 frasi) del sito che includa:
+1. Cosa fa/offre il sito (prodotto, servizio, contenuto)
+2. A chi si rivolge (target audience)
+3. Settore/categoria (es. e-commerce, SaaS, ristorante, blog, etc.)
+
+REGOLE:
+- Sii specifico e concreto, non generico
+- Descrivi quello che VEDI, non ipotesi
+- Max 4-5 frasi, stile descrittivo
+- Non usare bullet points, scrivi in modo discorsivo
+- Scrivi in italiano
+
+Esempio di output:
+"Sito di un ristorante fine dining a Milano specializzato in cucina contemporanea. Si rivolge a clienti alto-spendenti interessati a esperienze gastronomiche d'autore. Offre menu degustazione, carta vini curata e possibilita' di prenotazione online."
+"""
+
+        image_bytes = base64.b64decode(image_base64)
+        parts = [
+            types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+            types.Part.from_text(text=prompt)
+        ]
+
+        response = await self.client.aio.models.generate_content(
+            model=VISION_MODEL,
+            contents=[types.Content(role="user", parts=parts)],
+            config=types.GenerateContentConfig(max_output_tokens=512)
+        )
+
+        return response.text.strip()
+
     def _build_history(
         self,
         conversation_history: Optional[List[Dict[str, Any]]] = None
