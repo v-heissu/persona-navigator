@@ -855,7 +855,7 @@ function startSession() {
   selectedPersonaId = document.getElementById('personaSelect').value;
   const customProfile = customizedProfiles[selectedPersonaId] || '';
 
-  sendWS({
+  const startMsg = {
     action: 'start',
     persona_id: selectedPersonaId,
     url: url,
@@ -865,7 +865,23 @@ function startSession() {
     objective: document.getElementById('objectiveSelect').value,
     site_context: document.getElementById('siteContext').value.trim(),
     custom_profile: customProfile
-  });
+  };
+
+  // If this is a custom-created persona (temp ID), send full data to backend
+  if (selectedPersonaId.startsWith('temp_')) {
+    const p = personasList.find(x => x.id === selectedPersonaId);
+    if (p) {
+      startMsg.custom_persona_data = {
+        name: p.name,
+        description: p.description || '',
+        icon: p.icon || '',
+        color: p.color || '#7c5cfc',
+        full_profile: p.full_profile || ''
+      };
+    }
+  }
+
+  sendWS(startMsg);
 
   showLoading('Avvio browser...');
 

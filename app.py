@@ -145,7 +145,11 @@ async def websocket_endpoint(websocket: WebSocket):
     def get_active_persona():
         if custom_persona:
             return custom_persona
-        return get_persona(persona_id)
+        persona = get_persona(persona_id)
+        if persona is None:
+            # Fallback to default persona if ID not found
+            persona = get_persona("marco")
+        return persona
 
     try:
         claude = AIClient()
@@ -164,10 +168,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 site_context = msg.get("site_context", "")
                 current_viewport = msg.get("viewport", "desktop")
 
-                custom_profile = msg.get("custom_profile", "")
-                if custom_profile:
-                    base_persona = get_persona(persona_id)
-                    custom_persona = customize_persona(base_persona, custom_profile=custom_profile)
+                # Handle custom-created personas (from frontend)
+                custom_persona_data = msg.get("custom_persona_data")
+                if custom_persona_data:
+                    from personas import Persona
+                    custom_persona = Persona(
+                        id=persona_id,
+                        name=custom_persona_data.get("name", "Persona"),
+                        short_description=custom_persona_data.get("description", "Persona personalizzata"),
+                        full_profile=custom_persona_data.get("full_profile", ""),
+                        icon=custom_persona_data.get("icon", "👤"),
+                        color=custom_persona_data.get("color", "#7c5cfc"),
+                    )
+                else:
+                    custom_profile = msg.get("custom_profile", "")
+                    if custom_profile:
+                        base_persona = get_persona(persona_id)
+                        if base_persona:
+                            custom_persona = customize_persona(base_persona, custom_profile=custom_profile)
 
                 if not url:
                     await send("error", {"message": "URL mancante"})
