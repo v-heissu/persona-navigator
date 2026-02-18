@@ -135,6 +135,9 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .step-text{font-size:.7rem;color:var(--text3)}
 .step-bar{flex:1;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
 .step-bar-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .5s ease;width:0}
+.scroll-controls{display:flex;gap:4px}
+.scroll-controls button{padding:3px 8px;border-radius:4px;border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.65rem;cursor:pointer;transition:all .2s;font-family:inherit}
+.scroll-controls button:hover{border-color:var(--text3);color:var(--text)}
 .auto-controls{display:flex;gap:6px;margin-left:auto}
 .auto-controls button{padding:5px 14px;border-radius:6px;border:1px solid var(--bg4);background:var(--bg);color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .2s;font-family:inherit}
 .auto-controls button:hover{border-color:var(--text3)}
@@ -166,6 +169,10 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
 .msg-name .msg-icon{font-size:.8rem}
 .msg-nav-info{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--blue);margin-bottom:2px;padding-left:2px}
 .msg-highlight{color:var(--orange)}
+.msg-markdown p{margin:0 0 .4em 0}.msg-markdown p:last-child{margin-bottom:0}
+.msg-markdown strong{font-weight:600;color:var(--text)}
+.msg-markdown ul{margin:.3em 0;padding-left:1.3em}.msg-markdown li{margin-bottom:.2em}
+.msg-markdown h2{font-size:.9rem;font-weight:700;margin:.5em 0 .3em 0}
 
 /* Chat input */
 .chat-input-area{padding:12px 16px;border-top:1px solid var(--bg3);flex-shrink:0}
@@ -379,9 +386,13 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
               <svg viewBox="0 0 24 24" id="vpToggleIcon"><path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm-2 20h-4v-1h4v1zm3.25-3H6.75V4h10.5v14z"/></svg>
               <span id="vpToggleLabel">Mobile</span>
             </button>
-            <button id="commentBtn" onclick="requestComment()" title="Chiedi commento alla persona">
+            <button id="selectBtn" class="active" onclick="activateSelectMode()" title="Torna allo stato di default (cursore)">
+              <svg viewBox="0 0 24 24"><path d="M7 2l12 11.2-5.8.5 3.3 7.3-2.2 1-3.2-7.4L7 18.5V2z"/></svg>
+              Seleziona
+            </button>
+            <button id="commentBtn" onclick="requestComment()" title="Fai analizzare la schermata alla persona">
               <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
-              Commenta
+              Analizza
             </button>
             <button id="highlightBtn" onclick="toggleHighlight()" title="Evidenzia area">
               <svg viewBox="0 0 24 24"><path d="M3 3h18v2H3V3zm0 16h18v2H3v-2zm0-8h18v2H3v-2zm0 4h12v2H3v-2zm0-8h12v2H3V7z"/><rect x="14" y="7" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 1"/></svg>
@@ -406,6 +417,10 @@ header h1 .logo-icon{width:24px;height:24px;border-radius:5px}
           <button class="btn-cancel" onclick="cancelHighlight()">Annulla</button>
         </div>
         <div class="browser-footer" id="browserFooter" style="display:none">
+          <div class="scroll-controls" id="scrollControls">
+            <button onclick="scrollPage(-500)" title="Scroll su">&#9650; Su</button>
+            <button onclick="scrollPage(500)" title="Scroll giu'">&#9660; Giu'</button>
+          </div>
           <span class="step-text" id="stepText"></span>
           <div class="step-bar"><div class="step-bar-fill" id="stepBarFill"></div></div>
           <div class="auto-controls" id="autoControls" style="display:none">
@@ -594,7 +609,7 @@ const TUTORIAL_SETUP_ITEMS = [
 
 const TUTORIAL_SESSION_ITEMS = [
   { icon: '👆', title: 'Clicca per navigare', desc: 'Clicca su link, bottoni e menu come faresti normalmente' },
-  { icon: '💬', title: 'Commenta', desc: 'La persona commenterà quello che vede in questa schermata' },
+  { icon: '💬', title: 'Analizza', desc: 'La persona analizzerà quello che vede in questa schermata' },
   { icon: '🔲', title: 'Evidenzia area', desc: 'Seleziona un\'area e chiedi un parere specifico' },
   { icon: '📜', title: 'Scrolla tutto', desc: 'La persona scrollerà tutta la pagina e darà una valutazione completa' },
   { icon: '✏️', title: 'Chat', desc: 'Fai domande, chiedi opinioni o dai comandi di navigazione' }
@@ -983,12 +998,20 @@ function bindScreenshotEvents() {
     sendWS({ action: 'click', x: vpX, y: vpY });
   });
 
+  let scrollThrottleTimer = null;
   img.addEventListener('wheel', (e) => {
     if (isAutonomousRunning) return;
     e.preventDefault();
+    if (scrollThrottleTimer) return; // throttle: ignore while waiting
     const delta = Math.round(e.deltaY * 2);
     sendWS({ action: 'scroll', delta: delta });
+    scrollThrottleTimer = setTimeout(() => { scrollThrottleTimer = null; }, 400);
   }, { passive: false });
+}
+
+function scrollPage(delta) {
+  if (isAutonomousRunning) return;
+  sendWS({ action: 'scroll', delta: delta });
 }
 
 function updateProgress(step, max) {
@@ -1003,6 +1026,21 @@ function updateSuggestions(suggestions) {
   ).join('');
 }
 
+// === Select mode (default cursor state) ===
+function activateSelectMode() {
+  // Deactivate highlight mode if active
+  if (isHighlightMode) {
+    isHighlightMode = false;
+    const viewport = document.getElementById('browserViewport');
+    const canvas = document.getElementById('highlightCanvas');
+    document.getElementById('highlightBtn').classList.remove('active');
+    viewport.classList.remove('highlight-mode');
+    canvas.classList.remove('active');
+    cancelHighlight();
+  }
+  document.getElementById('selectBtn').classList.add('active');
+}
+
 // === Highlight tool ===
 function toggleHighlight() {
   isHighlightMode = !isHighlightMode;
@@ -1013,6 +1051,9 @@ function toggleHighlight() {
   btn.classList.toggle('active', isHighlightMode);
   viewport.classList.toggle('highlight-mode', isHighlightMode);
   canvas.classList.toggle('active', isHighlightMode);
+
+  // Toggle select button inversely
+  document.getElementById('selectBtn').classList.toggle('active', !isHighlightMode);
 
   if (!isHighlightMode) {
     cancelHighlight();
@@ -1171,7 +1212,7 @@ function addChatMessage(name, text) {
   const icon = p ? p.icon : '';
   const el = document.createElement('div');
   el.className = 'msg msg-persona';
-  el.innerHTML = `<div class="msg-name"><span class="msg-icon">${icon}</span> ${esc(name || 'Persona')}</div><div class="msg-bubble">${esc(text)}</div>`;
+  el.innerHTML = `<div class="msg-name"><span class="msg-icon">${icon}</span> ${esc(name || 'Persona')}</div><div class="msg-bubble msg-markdown">${renderMarkdown(text)}</div>`;
   appendChat(el);
 }
 

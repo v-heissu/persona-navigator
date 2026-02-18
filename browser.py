@@ -9,8 +9,29 @@ from playwright.async_api import async_playwright, Browser, Page, BrowserContext
 DESKTOP_VIEWPORT = {'width': 1280, 'height': 800}
 MOBILE_VIEWPORT = {'width': 390, 'height': 844}
 
-DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
 MOBILE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+
+# Extra HTTP headers to reduce bot detection / 403 blocks
+EXTRA_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+}
+
+# JS snippet to hide webdriver flag from navigator
+STEALTH_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['it-IT', 'it', 'en-US', 'en'] });
+window.chrome = { runtime: {} };
+"""
 
 # Selettori comuni per cookie banner
 COOKIE_SELECTORS = [
@@ -76,9 +97,12 @@ class BrowserManager:
             viewport=vp,
             user_agent=ua,
             locale='it-IT',
+            timezone_id='Europe/Rome',
             is_mobile=is_mobile,
-            has_touch=is_mobile
+            has_touch=is_mobile,
+            extra_http_headers=EXTRA_HEADERS,
         )
+        await self._context.add_init_script(STEALTH_INIT_SCRIPT)
         self._page = await self._context.new_page()
 
     async def stop(self) -> None:
@@ -105,13 +129,21 @@ class BrowserManager:
         if not url.startswith('http://') and not url.startswith('https://'):
             url = 'https://' + url
 
+        response = None
         try:
-            await self._page.goto(url, wait_until='domcontentloaded', timeout=15000)
+            response = await self._page.goto(url, wait_until='domcontentloaded', timeout=15000)
         except Exception:
             try:
-                await self._page.goto(url, wait_until='commit', timeout=15000)
+                response = await self._page.goto(url, wait_until='commit', timeout=15000)
             except Exception:
                 pass
+
+        # Check for HTTP errors (403 Forbidden, etc.)
+        if response and response.status in (403, 401):
+            raise RuntimeError(
+                f"Il sito ha bloccato l'accesso automatizzato (HTTP {response.status}). "
+                "Prova con un altro URL o verifica che il sito sia accessibile pubblicamente."
+            )
 
         await self._page.wait_for_timeout(500)
         await self._try_dismiss_cookies()
@@ -255,7 +287,12 @@ class BrowserManager:
         if not self._page:
             return "", ""
 
-        await self._page.evaluate(f'window.scrollBy(0, {delta_y})')
+        # Use scrollTo with explicit position for better compatibility with
+        # sites that override or intercept scrollBy (e.g. Unieuro).
+        await self._page.evaluate('''(dy) => {
+            const y = window.scrollY || window.pageYOffset || 0;
+            window.scrollTo({ top: y + dy, behavior: 'instant' });
+        }''', delta_y)
         await self._page.wait_for_timeout(300)
 
         screenshot_bytes = await self._page.screenshot(full_page=False)
@@ -344,9 +381,12 @@ class BrowserManager:
             viewport=vp,
             user_agent=ua,
             locale='it-IT',
+            timezone_id='Europe/Rome',
             is_mobile=is_mobile,
-            has_touch=is_mobile
+            has_touch=is_mobile,
+            extra_http_headers=EXTRA_HEADERS,
         )
+        await self._context.add_init_script(STEALTH_INIT_SCRIPT)
         self._page = await self._context.new_page()
 
         # Ri-naviga all'URL corrente
