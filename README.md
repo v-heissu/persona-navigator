@@ -28,7 +28,7 @@ Puoi creare personas temporanee per la sessione:
 ### Interazione con il Sito
 
 - **Click per navigare** - Clicca su link, bottoni e menu come faresti normalmente
-- **Commenta** - La persona commenta quello che vede nella schermata corrente
+- **Analizza** - La persona analizza quello che vede nella schermata corrente
 - **Evidenzia area** - Seleziona un'area specifica e chiedi un parere
 - **Scrolla tutto** - La persona scrolla l'intera pagina e da' una valutazione completa
 - **Chat** - Fai domande, chiedi opinioni o dai comandi di navigazione
@@ -133,7 +133,7 @@ L'app sara' disponibile su `http://localhost:8000`
 ### Durante la Sessione
 
 - **Navigare**: Clicca direttamente sulla preview del sito
-- **Commento rapido**: Bottone "Commenta" per reazione alla pagina corrente
+- **Analisi rapida**: Bottone "Analizza" per reazione alla persona alla pagina corrente
 - **Area specifica**: Bottone "Evidenzia" per selezionare e chiedere parere su un'area
 - **Full page**: Bottone "Scrolla tutto" per analisi completa della pagina
 - **Domande libere**: Scrivi nella chat per interagire con la persona
